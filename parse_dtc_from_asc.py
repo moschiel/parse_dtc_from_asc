@@ -4,6 +4,8 @@ import re
 PRINT_TP_CT = False
 PRINT_TP_DT = False
 PRINT_INCORRET_ORDER = False
+PRINT_J1939TP_FECAp = False
+PRINT_DM1 = False
 
 # Função para analisar a mensagem BAM TP:CT
 def parse_tp_ct_message(line):
@@ -45,6 +47,11 @@ def is_tp_dt_message_id(message_id):
     message_id = message_id.zfill(8)  # Garante que o identificador tenha 8 caracteres
     return message_id[2:4] == 'EB'
 
+# Verifica se o segundo byte do identificador CAN é EC
+def is_dm1_message_id(message_id):
+    message_id = message_id.zfill(8)  # Garante que o identificador tenha 8 caracteres
+    return message_id[2:6] == 'FECA'
+
 # Função principal para ler o arquivo de log e imprimir as mensagens BAM e TP.DT
 def read_log_and_print_bam_tp(file_path):
     current_bams = []  # Lista para armazenar mensagens BAM atuais
@@ -53,12 +60,16 @@ def read_log_and_print_bam_tp(file_path):
         for line in file:
             if 'Rx' in line:
                 if 'J1939TP FECAp' in line:  # O dado que foi dividido em diversos pacotes, é concatenado e fornecido pelo próprio log com o nome 'J1939TP'
-                    print(line.strip())
+                    if PRINT_J1939TP_FECAp:
+                        print(line.strip())
 
                 parts = line.split()
                 message_id = parts[2]
 
-                if is_bam_message_id(message_id):  # Identifica mensagem BAM
+                if(is_dm1_message_id(message_id)):
+                    if PRINT_DM1:
+                        print(line.strip())
+                elif is_bam_message_id(message_id):  # Identifica mensagem BAM
                     result = parse_tp_ct_message(line)
                     if result:
                         timestamp, message_id, total_size, num_packets, pgn = result
@@ -67,8 +78,10 @@ def read_log_and_print_bam_tp(file_path):
                         if pgn != 65226:
                             continue
 
-                        message_id_tp = message_id.replace('EC', 'EB')
+                        # Substitui 'EC' por 'EB' para obter o message_id_tp
+                        message_id_tp = message_id.replace('EC', 'EB', 1)
 
+                        # Remove BAMs anteriores com o mesmo message_id
                         for bam in current_bams:
                             if bam['message_id'] == message_id:
                                 current_bams.remove(bam)
@@ -83,13 +96,13 @@ def read_log_and_print_bam_tp(file_path):
                             'packets': []
                         })
                         if PRINT_TP_CT:
-                            print(f"TP.CT ->  Timestamp: {timestamp}, Message ID: {message_id}, Total Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
+                            print(f"TP.CT -> Time: {timestamp}, ID: {message_id}, Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
                 elif is_tp_dt_message_id(message_id):  # Identifica mensagem TP.DT
                     result = parse_tp_dt_message(line)
                     if result:
                         timestamp, message_id, packet_number, data = result
                         if PRINT_TP_DT:
-                            print(f"TP.DT ->  Timestamp: {timestamp}, Message ID: {message_id}, Packet Number: {packet_number}, Data: {' '.join(data)}")
+                            print(f"TP.DT ->  Time: {timestamp}, ID: {message_id}, Packet Number: {packet_number}, Data: {' '.join(data)}")
 
                         # Verifica se todos os pacotes foram recebidos
                         for bam in current_bams:
@@ -109,7 +122,7 @@ def read_log_and_print_bam_tp(file_path):
                                         combined_data.extend(packet[1])
                                     # Limita o tamanho dos dados combinados
                                     combined_data = combined_data[:bam['total_size']]
-                                    print(f"***** J1939TP -> Timestamp: {bam['timestamp']}, Message ID: {bam['message_id']}, Size: {bam['total_size']}, Data: {' '.join(combined_data)}")
+                                    print(f"J1939TP -> Time: {bam['timestamp']}, ID: {bam['message_id']}, Size: {bam['total_size']}, Data: {' '.join(combined_data)}")
                                     # Remove a BAM processada da lista
                                     current_bams.remove(bam)
                                     break
