@@ -47,7 +47,7 @@ def is_tp_dt_message_id(message_id):
     message_id = message_id.zfill(8)  # Garante que o identificador tenha 8 caracteres
     return message_id[2:4] == 'EB'
 
-# Verifica se o segundo byte do identificador CAN é EC
+# Verifica se o segundo e terceiro bytes do identificador CAN é FECA
 def is_dm1_message_id(message_id):
     message_id = message_id.zfill(8)  # Garante que o identificador tenha 8 caracteres
     return message_id[2:6] == 'FECA'
@@ -86,6 +86,7 @@ def read_log_and_print_bam_tp(file_path):
                             if bam['message_id'] == message_id:
                                 current_bams.remove(bam)
 
+                        # Adiciona a nova mensagem BAM à lista
                         current_bams.append({
                             'timestamp': timestamp,
                             'message_id': message_id,
