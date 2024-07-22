@@ -1,5 +1,10 @@
 import re
 
+# Variáveis de controle para impressão
+PRINT_TP_CT = False
+PRINT_TP_DT = False
+PRINT_INCORRET_ORDER = False
+
 # Função para analisar a mensagem BAM TP:CT
 def parse_tp_ct_message(line):
     parts = line.split()
@@ -30,6 +35,16 @@ def parse_tp_dt_message(line):
     data = data_bytes[1:8]
     return timestamp, message_id, packet_number, data
 
+# Verifica se o segundo byte do identificador CAN é EC
+def is_bam_message_id(message_id):
+    message_id = message_id.zfill(8)  # Garante que o identificador tenha 8 caracteres
+    return message_id[2:4] == 'EC'
+
+# Verifica se o segundo byte do identificador CAN é EB
+def is_tp_dt_message_id(message_id):
+    message_id = message_id.zfill(8)  # Garante que o identificador tenha 8 caracteres
+    return message_id[2:4] == 'EB'
+
 # Função principal para ler o arquivo de log e imprimir as mensagens BAM e TP.DT
 def read_log_and_print_bam_tp(file_path):
     current_bams = []  # Lista para armazenar mensagens BAM atuais
@@ -37,15 +52,22 @@ def read_log_and_print_bam_tp(file_path):
     with open(file_path, 'r') as file:
         for line in file:
             if 'Rx' in line:
-                if 'J1939TP' in line: # O dado que foi divido em diversos pacote, é contatenado e fornececido pelo proprio log com o nome 'J1939TP'
-                    print(line)
-                if '18EC' in line:  # Identifica mensagem BAM
+                if 'J1939TP FECAp' in line:  # O dado que foi dividido em diversos pacotes, é concatenado e fornecido pelo próprio log com o nome 'J1939TP'
+                    print(line.strip())
+
+                parts = line.split()
+                message_id = parts[2]
+
+                if is_bam_message_id(message_id):  # Identifica mensagem BAM
                     result = parse_tp_ct_message(line)
                     if result:
                         timestamp, message_id, total_size, num_packets, pgn = result
 
-                        posicao = 3
-                        message_id_tp = message_id[:posicao] + 'B' + message_id[posicao + 1:]
+                        # Se nao for PGN de DTC, ignora
+                        if pgn != 65226:
+                            continue
+
+                        message_id_tp = message_id.replace('EC', 'EB')
 
                         for bam in current_bams:
                             if bam['message_id'] == message_id:
@@ -54,25 +76,27 @@ def read_log_and_print_bam_tp(file_path):
                         current_bams.append({
                             'timestamp': timestamp,
                             'message_id': message_id,
-                            'message_id_tp': message_id_tp, 
+                            'message_id_tp': message_id_tp,
                             'total_size': total_size,
                             'num_packets': num_packets,
                             'pgn': pgn,
                             'packets': []
                         })
-                        print(f"TP.CT ->  Timestamp: {timestamp}, Message ID: {message_id}, Total Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
-                elif '18EB' in line:  # Identifica mensagem TP.DT
+                        if PRINT_TP_CT:
+                            print(f"TP.CT ->  Timestamp: {timestamp}, Message ID: {message_id}, Total Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
+                elif is_tp_dt_message_id(message_id):  # Identifica mensagem TP.DT
                     result = parse_tp_dt_message(line)
                     if result:
                         timestamp, message_id, packet_number, data = result
-                        print(f"TP.DT ->  Timestamp: {timestamp}, Message ID: {message_id}, Packet Number: {packet_number}, Data: {' '.join(data)}")
+                        if PRINT_TP_DT:
+                            print(f"TP.DT ->  Timestamp: {timestamp}, Message ID: {message_id}, Packet Number: {packet_number}, Data: {' '.join(data)}")
 
                         # Verifica se todos os pacotes foram recebidos
                         for bam in current_bams:
                             if bam['message_id_tp'] == message_id:
-
-                                if(packet_number != (len(bam['packets']) + 1)):
-                                    print('Ordem do pacote incorreta')
+                                if packet_number != (len(bam['packets']) + 1):
+                                    if PRINT_INCORRET_ORDER:
+                                        print('Ordem do pacote incorreta')
                                     current_bams.remove(bam)
                                     break
 
@@ -83,11 +107,14 @@ def read_log_and_print_bam_tp(file_path):
                                     combined_data = []
                                     for packet in bam['packets']:
                                         combined_data.extend(packet[1])
+                                    # Limita o tamanho dos dados combinados
+                                    combined_data = combined_data[:bam['total_size']]
                                     print(f"***** J1939TP -> Timestamp: {bam['timestamp']}, Message ID: {bam['message_id']}, Size: {bam['total_size']}, Data: {' '.join(combined_data)}")
                                     # Remove a BAM processada da lista
                                     current_bams.remove(bam)
                                     break
 
 # Chamar a função com o caminho para o arquivo de log
-file_path = 'test.asc'
+# file_path = 'test.asc'
+file_path = 'VWConstel2024_1.asc'
 read_log_and_print_bam_tp(file_path)
