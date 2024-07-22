@@ -128,6 +128,6 @@ def read_log_and_print_bam_tp(file_path):
                                     break
 
 # Chamar a função com o caminho para o arquivo de log
-# file_path = 'test.asc'
-file_path = 'VWConstel2024_1.asc'
+# file_path = 'example_files/test.asc'
+file_path = 'example_files/VWConstel2024_1.asc'
 read_log_and_print_bam_tp(file_path)
