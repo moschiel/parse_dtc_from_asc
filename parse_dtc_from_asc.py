@@ -14,11 +14,12 @@ PRINT_TP_DM1_MULTI_FRAME = False
 PRINT_INCORRET_ORDER = False
 PRINT_DM1_PARSED = False
 PRINT_ACTIVE_DTCs = False
-PRINT_NEW_ACTIVE_DTCs = True
-PRINT_REMOVED_DTCs = True
+PRINT_NEW_ACTIVE_DTCs = False
+PRINT_REMOVED_DTCs = False
 
 # control variable for emulating time
 EMULATE_TIME = True
+DISPLAY_SCREEN = True
 # To keep track of the last timestamp for time emulation  
 last_time = 0.0 
 # List to store active faults
@@ -85,12 +86,11 @@ def print_active_faults():
     print(f'Active Faults:')
     global active_faults
     for fault in active_faults: 
-        print(f"        SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
-    # update_active_faults_display()
+        print(f"        SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}, MIL: {fault['mil']}, RSL: {fault['rsl']}, AWL: {fault['awl']}, PL: {fault['pl']}")
 
 
 # Function to update the active faults list
-def update_active_faults(src, spn, fmi, oc, float_timestamp):
+def update_active_faults(src, spn, fmi, oc, mil, rsl, awl, pl, float_timestamp):
     if EMULATE_TIME == False:
         return
 
@@ -99,12 +99,16 @@ def update_active_faults(src, spn, fmi, oc, float_timestamp):
     for fault in active_faults:
         if fault['src'] == src and fault['spn'] == spn and fault['fmi'] == fmi:
             fault['oc'] = oc
+            fault['mil'] = mil
+            fault['rsl'] = rsl
+            fault['awl'] = awl
+            fault['pl'] = pl
             fault['last_seen'] = float_timestamp
             updatedExistingFault = True
 
     # Add new fault 
     if(updatedExistingFault == False):
-        active_faults.append({'src': src, 'spn': spn, 'fmi': fmi, 'oc': oc, 'last_seen': float_timestamp})
+        active_faults.append({'src': src, 'spn': spn, 'fmi': fmi, 'oc': oc, 'mil': mil, 'rsl': rsl, 'awl': awl, 'pl': pl, 'last_seen': float_timestamp})
         if PRINT_NEW_ACTIVE_DTCs:
             print(f'{float_timestamp} new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
 
@@ -179,7 +183,7 @@ def parse_dm1_message(timestamp, src, data_bytes):
         if PRINT_DM1_PARSED:
             print(f"        DTC[{j}] -> SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}, CM: {cm}, OC: {oc}")
         
-        if update_active_faults(src, spn, fmi, oc, float(timestamp)):
+        if update_active_faults(src, spn, fmi, oc, mil, rsl, awl, pl, float(timestamp)):
             added_new_faults = True
         j += 1
 
@@ -201,6 +205,14 @@ def emulate_waiting_time(float_timestamp):
                 time.sleep(time_diff)
         last_time = float_timestamp
 
+def update_screen_time(float_timestamp):
+    if EMULATE_TIME == False or DISPLAY_SCREEN == False:
+        return
+    global last_displayed_timestamp
+    if float_timestamp - last_displayed_timestamp >= 1:
+        last_displayed_timestamp = float_timestamp
+        timestamp_label.config(text=f"Time: {int(float_timestamp)}s")
+
 # Main function to read log file and print DTCs from individual frames or from BAM frames
 def read_log_and_print_dtc(file_path):
     current_bams = []  # List to store current BAM messages
@@ -217,11 +229,7 @@ def read_log_and_print_dtc(file_path):
                 parts = line.split()
                 timestamp = parts[0]
                 float_timestamp = float(timestamp)
-
-                global last_displayed_timestamp
-                if float_timestamp - last_displayed_timestamp >= 1:
-                    last_displayed_timestamp = float_timestamp
-                    timestamp_label.config(text=f"Time: {int(float_timestamp)}s")
+                update_screen_time(float_timestamp)
 
                 message_id = parts[2]  # CAN ID
                 src = message_id.zfill(8)[6:8] # source, last byte of CAN ID
@@ -305,7 +313,7 @@ def read_log_and_print_dtc(file_path):
 # Dictionary to store references to treeview items
 treeview_items = {}
 def update_active_faults_display():
-    if EMULATE_TIME == False:
+    if EMULATE_TIME == False or DISPLAY_SCREEN == False:
         return
 
     global treeview_items
@@ -316,7 +324,7 @@ def update_active_faults_display():
     # Update existing items and add new ones
     for fault in active_faults:
         key = (fault['src'], fault['spn'], fault['fmi'])
-        values = (f"0x{fault['src']} ({int(fault['src'], 16)})", f"0x{format(fault['spn'], 'X')} ({fault['spn']})", fault['fmi'], fault['oc'], fault['last_seen'])
+        values = (f"0x{fault['src']} ({int(fault['src'], 16)})", f"0x{format(fault['spn'], 'X')} ({fault['spn']})", fault['fmi'], fault['oc'], fault['mil'], fault['rsl'], fault['awl'], fault['pl'], fault['last_seen'])
 
         if key in treeview_items:
             # Update existing item
@@ -336,20 +344,33 @@ def update_active_faults_display():
 file_path = 'example_files/VWConstel2024_1.asc'
 # file_path = 'example_files/VWConstel2024_2.asc'
 
-if EMULATE_TIME:
+if EMULATE_TIME and DISPLAY_SCREEN:
     # Setup Tkinter window
     root = tk.Tk()
     root.title("Active Faults")
-    root.geometry("600x400")
+    root.geometry("800x400")
 
     # Setup treeview
-    columns = ('SRC', 'SPN', 'FMI', 'OC', 'Last Seen')
+    columns = ('SRC', 'SPN', 'FMI', 'OC', 'MIL', 'RSL', 'AWL', 'PL', 'Last Seen')
     tree = ttk.Treeview(root, columns=columns, show='headings')
     tree.heading('SRC', text='SRC')
     tree.heading('SPN', text='SPN')
     tree.heading('FMI', text='FMI')
     tree.heading('OC', text='OC')
+    tree.heading('MIL', text='MIL')
+    tree.heading('RSL', text='RSL')
+    tree.heading('AWL', text='AWL')
+    tree.heading('PL', text='PL')
     tree.heading('Last Seen', text='Last Seen')
+    tree.column('SRC', width=40)        # Adjust width as needed
+    tree.column('SPN', width=80)        # Adjust width as needed
+    tree.column('FMI', width=30)        # Adjust width as needed
+    tree.column('OC', width=30)         # Adjust width as needed
+    tree.column('MIL', width=30)        # Adjust width as needed
+    tree.column('RSL', width=30)        # Adjust width as needed
+    tree.column('AWL', width=30)        # Adjust width as needed
+    tree.column('PL', width=30)         # Adjust width as needed
+    tree.column('Last Seen', width=60) # Adjust width as needed
     tree.pack(fill=tk.BOTH, expand=True)
     # Configure tag colors
     tree.tag_configure('active', background='white')
