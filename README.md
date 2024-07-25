@@ -32,88 +32,35 @@ This project provides a Python script to parse J1939 Diagnostic Trouble Codes (D
    python parse_dtc_from_asc.py
    ```
 
-## Code Structure
+## Output Format
 
-### Main Function
+When only `PRINT_DM1_PARSED` is set to `True`, the output will display parsed DM1 messages in the following format:
 
-```python
-def read_log_and_print_dtc(file_path):
-    current_bams = []  # List to store current BAM messages
-    with open(file_path, 'r') as file:
-        for line in file:
-            if 'Rx' in line:
-                if 'J1939TP FECAp' in line:  
-                    if PRINT_J1939TP_FECAp:
-                        print(line.strip())
-                parts = line.split()
-                message_id = parts[2]
-                src = message_id.zfill(8)[6:8]
-                if(is_dm1_message_id(message_id)):
-                    data_bytes = [int(b, 16) for b in parts[6:14]]
-                    spn = (((data_bytes[4] >> 5) & 0x7) << 16) | ((data_bytes[3] << 8) & 0xFF00) | data_bytes[2]
-                    if spn != 0:
-                        if PRINT_DM1_SINGLE_FRAME:
-                            print(line.strip())
-                        timestamp = parts[0]
-                        parse_dm1_message(timestamp, src, data_bytes)
-                elif is_tp_cm_message_id(message_id):
-                    result = parse_tp_ct_message(line)
-                    if result:
-                        timestamp, message_id, total_size, num_packets, pgn = result
-                        if pgn != 65226:
-                            continue
-                        message_id_tp_ct = message_id.replace('EC', 'EB', 1)
-                        for bam in current_bams:
-                            if bam['message_id'] == message_id:
-                                current_bams.remove(bam)
-                        current_bams.append({
-                            'timestamp': timestamp,
-                            'message_id': message_id,
-                            'message_id_tp_ct': message_id_tp_ct,
-                            'total_size': total_size,
-                            'num_packets': num_packets,
-                            'pgn': pgn,
-                            'packets': []
-                        })
-                        if PRINT_TP_CT:
-                            print(f"TP.CT -> Time: {timestamp}, ID: {message_id}, Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
-                elif is_tp_dt_message_id(message_id):
-                    result = parse_tp_dt_message(line)
-                    if result:
-                        timestamp, message_id, packet_number, data = result
-                        if PRINT_TP_DT:
-                            print(f"TP.DT ->  Time: {timestamp}, ID: {message_id}, Packet Number: {packet_number}, Data: {' '.join(data)}")
-                        for bam in current_bams:
-                            if bam['message_id_tp_ct'] == message_id:
-                                if packet_number != (len(bam['packets']) + 1):
-                                    if PRINT_INCORRET_ORDER:
-                                        print('Packet Order is Incorrect')
-                                    current_bams.remove(bam)
-                                    break
-                                bam['packets'].append((packet_number, data))
-                                if len(bam['packets']) == bam['num_packets']:
-                                    bam['packets'].sort()
-                                    combined_data = []
-                                    for packet in bam['packets']:
-                                        combined_data.extend(packet[1])
-                                    combined_data = combined_data[:bam['total_size']]
-                                    if PRINT_TP_DM1_MULTI_FRAME:
-                                        print(f"TP -> Time: {bam['timestamp']}, ID: {bam['message_id']}, Size: {bam['total_size']}, Data: {' '.join(combined_data)}")
-                                    data_bytes = [int(b, 16) for b in combined_data]
-                                    parse_dm1_message(timestamp, src, data_bytes)
-                                    current_bams.remove(bam)
-                                    break
+```
+DM1 -> Time: [timestamp], SRC: 0x[src] ([src_decimal]), MIL: [mil_status], RSL: [rsl_status], AWL: [awl_status], PL: [pl_status]
+        DTC[1] -> SPN: 0x[spn_hex] ([spn_decimal]), FMI: [fmi], CM: [cm], OC: [oc]
+        DTC[2] -> SPN: 0x[spn_hex] ([spn_decimal]), FMI: [fmi], CM: [cm], OC: [oc]
+        ...
 ```
 
-### Helper Functions
+### Example
 
-- `parse_tp_ct_message(line)`: Parses BAM TP:CT messages.
-- `parse_tp_dt_message(line)`: Parses BAM TP.DT messages.
-- `is_tp_cm_message_id(message_id)`: Checks if the message ID indicates a TP.CM message.
-- `is_tp_dt_message_id(message_id)`: Checks if the message ID indicates a TP.DT message.
-- `is_dm1_message_id(message_id)`: Checks if the message ID indicates a DM1 message.
-- `bytes_to_binary_string(byte_list)`: Converts a list of bytes to a binary string.
-- `parse_dm1_message(time, src, data_bytes)`: Parses DM1 messages and prints DTC details.
+```
+DM1 -> Time: 110.945338, SRC: 0x03 (3), MIL: 3, RSL: 1, AWL: 1, PL: 0
+        DTC[1] -> SPN: 0xBE (190), FMI: 8, CM: 0, OC: 2
+        DTC[2] -> SPN: 0x201 (513), FMI: 8, CM: 0, OC: 2
+        DTC[3] -> SPN: 0xBD2 (3026), FMI: 4, CM: 0, OC: 7
+        DTC[4] -> SPN: 0xD1D (3357), FMI: 8, CM: 0, OC: 2
+        DTC[5] -> SPN: 0x5C (92), FMI: 8, CM: 0, OC: 2
+        DTC[6] -> SPN: 0x208 (520), FMI: 8, CM: 0, OC: 2
+        DTC[7] -> SPN: 0x6E (110), FMI: 8, CM: 0, OC: 2
+        DTC[8] -> SPN: 0x6C (108), FMI: 8, CM: 0, OC: 2
+DM1 -> Time: 111.796362, SRC: 0x27 (39), MIL: 0, RSL: 0, AWL: 1, PL: 0
+        DTC[1] -> SPN: 0x7EE22 (519714), FMI: 3, CM: 1, OC: 1
+        DTC[2] -> SPN: 0x1EE52 (126546), FMI: 3, CM: 1, OC: 1
+        DTC[3] -> SPN: 0xEE52 (61010), FMI: 3, CM: 1, OC: 1
+        DTC[4] -> SPN: 0x3F442 (259138), FMI: 0, CM: 1, OC: 1
+```
 
 ## Contributing
 
@@ -126,7 +73,3 @@ def read_log_and_print_dtc(file_path):
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contact
-
-For any inquiries, please contact [your-email@example.com](mailto:your-email@example.com).
