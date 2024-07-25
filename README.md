@@ -1,5 +1,5 @@
 
-# Parse DTC from ASC
+# Parse DTC from CANalyzer ASC File
 
 Parse J1939 Diagnostics Trouble Code (DTC) from CANalyzer ASC logging file
 
@@ -12,6 +12,7 @@ This project provides a Python script to parse J1939 Diagnostic Trouble Codes (D
 - Parses single-frame DM1 messages (PGN 0xFECA).
 - Concatenates and parses multi-frame DM1 messages transmitted using BAM (Broadcast Announce Message) and TP.DT (Data Transfer) messages.
 - Provides detailed output of parsed DM1 messages, including status of various indicator lamps and detailed DTC information.
+- Emulates the time between log entries to simulate real-time parsing.
 
 ## Installation
 
@@ -31,6 +32,17 @@ This project provides a Python script to parse J1939 Diagnostic Trouble Codes (D
    ```bash
    python parse_dtc_from_asc.py
    ```
+
+## Configuration
+
+- `PRINT_DM1_SINGLE_FRAME`: Controls printing of single-frame DM1 messages.
+- `PRINT_TP_CT`: Controls printing of TP.CT messages.
+- `PRINT_TP_DT`: Controls printing of TP.DT messages.
+- `PRINT_J1939TP_FECAp`: Controls printing of concatenated J1939TP FECA messages.
+- `PRINT_TP_DM1_MULTI_FRAME`: Controls printing of multi-frame DM1 messages.
+- `PRINT_INCORRET_ORDER`: Controls printing of incorrect packet order messages.
+- `PRINT_DM1_PARSED`: Controls printing of parsed DM1 messages.
+- `EMULATE_TIME`: Controls whether to emulate the time between log entries.
 
 ## Output Format
 
