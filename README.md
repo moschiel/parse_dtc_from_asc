@@ -1,61 +1,37 @@
 
-# Parse DTC from CANalyzer ASC File
+# parse_dtc_from_asc
 
-Parse J1939 Diagnostics Trouble Code (DTC) from CANalyzer ASC logging file
+**Description**: Parse J1939 Diagnostics Trouble Code (DTC) from CANalyzer ASC logging file.
 
 ## Overview
 
-This project provides a Python script to parse J1939 Diagnostic Trouble Codes (DTC) from CANalyzer ASC logging files. The script specifically targets messages with the PGN 0xFECA, which are used to transmit Diagnostic Message 1 (DM1) data. It also handles the concatenation of multi-packet messages using the Transport Protocol (TP).
+This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANalyzer ASC logging file, specifically focusing on messages with PGN 0xFECA (DM1). It can handle both single-frame and multi-frame (BAM) messages and maintains a list of active faults, removing them if they are not seen for a specified timeout period.
 
 ## Features
 
-- Parses single-frame DM1 messages (PGN 0xFECA).
-- Concatenates and parses multi-frame DM1 messages transmitted using BAM (Broadcast Announce Message) and TP.DT (Data Transfer) messages.
-- Provides detailed output of parsed DM1 messages, including status of various indicator lamps and detailed DTC information.
-- Emulates the time between log entries to simulate real-time parsing.
-
-## Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/parse_dtc_from_asc.git
-   cd parse_dtc_from_asc
-   ```
-
-2. Ensure you have Python 3.x installed on your system.
+- Parse single-frame DM1 messages.
+- Parse multi-frame DM1 messages using BAM (Broadcast Announce Message).
+- Maintain a list of active faults, adding new faults and removing those that are inactive for a specified period.
+- Emulate real-time processing based on timestamps in the log file.
 
 ## Usage
 
-1. Place your CANalyzer ASC log file in the `example_files` directory.
-2. Edit the `file_path` variable in the script to point to your log file.
-3. Run the script:
-   ```bash
-   python parse_dtc_from_asc.py
-   ```
+1. Set the `file_path` variable to the path of your ASC log file.
+2. Adjust the print control variables as needed:
+   - `PRINT_DM1_SINGLE_FRAME`: Print single-frame DM1 messages.
+   - `PRINT_TP_CT`: Print TP.CT messages.
+   - `PRINT_TP_DT`: Print TP.DT messages.
+   - `PRINT_J1939TP_FECAp`: Print concatenated J1939TP FECA messages.
+   - `PRINT_TP_DM1_MULTI_FRAME`: Print multi-frame DM1 messages.
+   - `PRINT_INCORRET_ORDER`: Print a message when packet order is incorrect.
+   - `PRINT_DM1_PARSED`: Print parsed DM1 messages.
+   - `PRINT_ACTIVE_DTCs`: Print active DTCs list.
 
-## Configuration
-
-- `PRINT_DM1_SINGLE_FRAME`: Controls printing of single-frame DM1 messages.
-- `PRINT_TP_CT`: Controls printing of TP.CT messages.
-- `PRINT_TP_DT`: Controls printing of TP.DT messages.
-- `PRINT_J1939TP_FECAp`: Controls printing of concatenated J1939TP FECA messages.
-- `PRINT_TP_DM1_MULTI_FRAME`: Controls printing of multi-frame DM1 messages.
-- `PRINT_INCORRET_ORDER`: Controls printing of incorrect packet order messages.
-- `PRINT_DM1_PARSED`: Controls printing of parsed DM1 messages.
-- `EMULATE_TIME`: Controls whether to emulate the time between log entries.
+3. Run the script.
 
 ## Output Format
 
-When only `PRINT_DM1_PARSED` is set to `True`, the output will display parsed DM1 messages in the following format:
-
-```
-DM1 -> Time: [timestamp], SRC: 0x[src] ([src_decimal]), MIL: [mil_status], RSL: [rsl_status], AWL: [awl_status], PL: [pl_status]
-        DTC[1] -> SPN: 0x[spn_hex] ([spn_decimal]), FMI: [fmi], CM: [cm], OC: [oc]
-        DTC[2] -> SPN: 0x[spn_hex] ([spn_decimal]), FMI: [fmi], CM: [cm], OC: [oc]
-        ...
-```
-
-### Example
+### When only `PRINT_DM1_PARSED` is active:
 
 ```
 DM1 -> Time: 110.945338, SRC: 0x03 (3), MIL: 3, RSL: 1, AWL: 1, PL: 0
@@ -67,21 +43,37 @@ DM1 -> Time: 110.945338, SRC: 0x03 (3), MIL: 3, RSL: 1, AWL: 1, PL: 0
         DTC[6] -> SPN: 0x208 (520), FMI: 8, CM: 0, OC: 2
         DTC[7] -> SPN: 0x6E (110), FMI: 8, CM: 0, OC: 2
         DTC[8] -> SPN: 0x6C (108), FMI: 8, CM: 0, OC: 2
-DM1 -> Time: 111.796362, SRC: 0x27 (39), MIL: 0, RSL: 0, AWL: 1, PL: 0
-        DTC[1] -> SPN: 0x7EE22 (519714), FMI: 3, CM: 1, OC: 1
-        DTC[2] -> SPN: 0x1EE52 (126546), FMI: 3, CM: 1, OC: 1
-        DTC[3] -> SPN: 0xEE52 (61010), FMI: 3, CM: 1, OC: 1
-        DTC[4] -> SPN: 0x3F442 (259138), FMI: 0, CM: 1, OC: 1
 ```
 
-## Contributing
+###  When `EMULATE_TIME` and `PRINT_ACTIVE_DTCs` is active:
 
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature-branch`).
-3. Commit your changes (`git commit -m 'Add new feature'`).
-4. Push to the branch (`git push origin feature-branch`).
-5. Create a new Pull Request.
+- New faults are printed as:
+  ```
+  {timestamp} new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}
+  ```
 
-## License
+- Removed faults are printed as:
+  ```
+  {timestamp} removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}
+  ```
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- Active faults list is printed as:
+  ```
+  Active Faults:
+        SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}
+  ```
+
+## Example Run
+
+To emulate the log processing time and manage active faults list:
+
+```python
+EMULATE_TIME = True  # Enable time emulation
+fault_timeout = 50   # Set the timeout for removing inactive faults
+
+# Call the function with the path to the log file
+file_path = 'example_files/VWConstel2024_1.asc'
+read_log_and_print_dtc(file_path)
+```
+
+This will process the log file, parse the DTC messages, manage the active faults list, and print the results based on the specified print control variables.

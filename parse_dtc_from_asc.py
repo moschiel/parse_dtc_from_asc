@@ -9,12 +9,17 @@ PRINT_TP_DT = False
 PRINT_J1939TP_FECAp = False
 PRINT_TP_DM1_MULTI_FRAME = False
 PRINT_INCORRET_ORDER = False
-PRINT_DM1_PARSED = True
+PRINT_DM1_PARSED = False
+PRINT_ACTIVE_DTCs = True
 
 # control variable for emulating time
-EMULATE_TIME = False
+EMULATE_TIME = True
 # To keep track of the last timestamp for time emulation  
 last_time = 0.0 
+# List to store active faults
+active_faults = []
+# Remove faults that have not been updated by this amount of time
+fault_timeout = 50
 
 # Function to parse BAM TP:CT message
 def parse_tp_ct_message(line):
@@ -67,6 +72,45 @@ def bytes_to_binary_string(byte_list):
     binary_string = ''.join(format(byte, '08b') for byte in byte_list)
     return binary_string
 
+def print_active_faults():
+    if PRINT_ACTIVE_DTCs == False:
+        return
+    print(f'Active Faults:')
+    global active_faults
+    for fault in active_faults: 
+        print(f"        SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
+
+
+# Function to update the active faults list
+def update_active_faults(src, spn, fmi, oc, timestamp):
+    global active_faults
+    for fault in active_faults:
+        if fault['src'] == src and fault['spn'] == spn and fault['fmi'] == fmi:
+            fault['oc'] = oc
+            fault['last_seen'] = timestamp
+            return False
+    active_faults.append({'src': src, 'spn': spn, 'fmi': fmi, 'oc': oc, 'last_seen': timestamp})
+    if PRINT_ACTIVE_DTCs:
+        print(f'{timestamp} new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
+    return True
+
+# Remove faults that have not been updated for a certain time
+def remove_inactive_faults(timestamp):
+    global active_faults
+    global fault_timeout
+    current_time = timestamp
+    new_active_faults = []
+    removed = False
+    for fault in active_faults:
+        if current_time - fault['last_seen'] <= fault_timeout:
+            new_active_faults.append(fault)
+        else:
+            if PRINT_ACTIVE_DTCs: 
+                print(f"{timestamp} removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
+            removed = True
+    active_faults = new_active_faults
+    return removed
+
 # Function to parse DM1 message
 def parse_dm1_message(timestamp, src, data_bytes):
     # print(data_bytes)
@@ -92,7 +136,7 @@ def parse_dm1_message(timestamp, src, data_bytes):
     if EMULATE_TIME:
         global last_time
         if last_time != 0:
-            time_diff = ffloat_timestamp - last_time
+            time_diff = float_timestamp - last_time
             if time_diff > 0:
                 time.sleep(time_diff)
         last_time = float_timestamp
@@ -105,6 +149,7 @@ def parse_dm1_message(timestamp, src, data_bytes):
     if PRINT_DM1_PARSED:
         print(f"DM1 -> Time: {timestamp}, SRC: 0x{src} ({int(src, 16)}), MIL: {mil}, RSL: {rsl}, AWL: {awl}, PL: {pl}")
     
+    new_faults = False
     # starting at third byte, iterate 4 bytes each cycle
     j = 1
     for i in range(2, len(data_bytes) - 2, 4):
@@ -115,7 +160,15 @@ def parse_dm1_message(timestamp, src, data_bytes):
         oc = data_bytes[i+3] & 0x7F # #byte6, 7bits, Occurence Counter 
         if PRINT_DM1_PARSED:
             print(f"        DTC[{j}] -> SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}, CM: {cm}, OC: {oc}")
+        if EMULATE_TIME:
+            new_faults = update_active_faults(src, spn, fmi, oc, float_timestamp)
         j += 1
+
+    if EMULATE_TIME:
+        removed_faults = remove_inactive_faults(float_timestamp)
+        if new_faults or removed_faults:
+            print_active_faults()
+
 
 # Main function to read log file and print DTCs from individual frames or from BAM frames
 def read_log_and_print_dtc(file_path):
