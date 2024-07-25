@@ -1,4 +1,6 @@
 import re
+import sys
+import time
 
 # Print control variables
 PRINT_DM1_SINGLE_FRAME = False
@@ -9,6 +11,10 @@ PRINT_TP_DM1_MULTI_FRAME = False
 PRINT_INCORRET_ORDER = False
 PRINT_DM1_PARSED = True
 
+# control variable for emulating time
+EMULATE_TIME = False
+# To keep track of the last timestamp for time emulation  
+last_time = 0.0 
 
 # Function to parse BAM TP:CT message
 def parse_tp_ct_message(line):
@@ -62,7 +68,7 @@ def bytes_to_binary_string(byte_list):
     return binary_string
 
 # Function to parse DM1 message
-def parse_dm1_message(time, src, data_bytes):
+def parse_dm1_message(timestamp, src, data_bytes):
     # print(data_bytes)
     # binary_str = bytes_to_binary_string(data_bytes)
     # print(binary_str)
@@ -82,13 +88,22 @@ def parse_dm1_message(time, src, data_bytes):
     # aux = binary_str[start : start+7]
     # print('OC_AUX', aux, int(aux, 2))
 
+    float_timestamp = float(timestamp)
+    if EMULATE_TIME:
+        global last_time
+        if last_time != 0:
+            time_diff = ffloat_timestamp - last_time
+            if time_diff > 0:
+                time.sleep(time_diff)
+        last_time = float_timestamp
+
     mil = (data_bytes[0] >> 6) & 0x03 # byte1, 2bits, Malfunction Indicator Lamp status
     rsl = (data_bytes[0] >> 4) & 0x03 # byte1, 2bits, Red Stop Lamp status
     awl = (data_bytes[0] >> 2) & 0x03 # byte1, 2bits, Amber Warning Lamp status
     pl = data_bytes[0] & 0x03 # byte1, 2bits, Protect Lamp status
     rfu = data_bytes[1] # byte2, reserved
     if PRINT_DM1_PARSED:
-        print(f"DM1 -> Time: {time}, SRC: 0x{src} ({int(src, 16)}), MIL: {mil}, RSL: {rsl}, AWL: {awl}, PL: {pl}")
+        print(f"DM1 -> Time: {timestamp}, SRC: 0x{src} ({int(src, 16)}), MIL: {mil}, RSL: {rsl}, AWL: {awl}, PL: {pl}")
     
     # starting at third byte, iterate 4 bytes each cycle
     j = 1
