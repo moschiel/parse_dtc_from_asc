@@ -25,6 +25,8 @@ last_time = 0.0
 active_faults = []
 # Remove faults that have not been updated by this amount of time
 fault_timeout = 1
+# Variable to store the last displayed timestamp
+last_displayed_timestamp = 0.0
 
 # Function to parse BAM TP:CT message
 def parse_tp_ct_message(line):
@@ -215,6 +217,12 @@ def read_log_and_print_dtc(file_path):
                 parts = line.split()
                 timestamp = parts[0]
                 float_timestamp = float(timestamp)
+
+                global last_displayed_timestamp
+                if float_timestamp - last_displayed_timestamp >= 1:
+                    last_displayed_timestamp = float_timestamp
+                    timestamp_label.config(text=f"Time: {int(float_timestamp)}s")
+
                 message_id = parts[2]  # CAN ID
                 src = message_id.zfill(8)[6:8] # source, last byte of CAN ID
 
@@ -346,6 +354,27 @@ if EMULATE_TIME:
     # Configure tag colors
     tree.tag_configure('active', background='white')
     tree.tag_configure('inactive', background='lightgrey')
+
+    # Add a label to display the timestamp
+    timestamp_label = tk.Label(root, text="Time: 0s")
+    timestamp_label.pack()
+
+    # Add a label and entry to change fault_timeout
+    timeout_label = tk.Label(root, text="Fault Timeout (seconds):")
+    timeout_label.pack()
+    timeout_entry = tk.Entry(root)
+    timeout_entry.pack()
+    timeout_entry.insert(0, str(fault_timeout))
+
+    def update_timeout():
+        global fault_timeout
+        try:
+            fault_timeout = float(timeout_entry.get())
+        except ValueError:
+            pass  # Ignore invalid input
+
+    timeout_button = tk.Button(root, text="Update Timeout", command=update_timeout)
+    timeout_button.pack()
 
     def read_log_thread(file_path):
         read_log_and_print_dtc(file_path)
