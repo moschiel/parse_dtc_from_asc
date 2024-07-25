@@ -1,6 +1,9 @@
 import re
 import sys
 import time
+import threading
+import tkinter as tk
+from tkinter import ttk
 
 # Print control variables
 PRINT_DM1_SINGLE_FRAME = False
@@ -10,7 +13,9 @@ PRINT_J1939TP_FECAp = False
 PRINT_TP_DM1_MULTI_FRAME = False
 PRINT_INCORRET_ORDER = False
 PRINT_DM1_PARSED = False
-PRINT_ACTIVE_DTCs = True
+PRINT_ACTIVE_DTCs = False
+PRINT_NEW_ACTIVE_DTCs = True
+PRINT_REMOVED_DTCs = True
 
 # control variable for emulating time
 EMULATE_TIME = True
@@ -19,7 +24,7 @@ last_time = 0.0
 # List to store active faults
 active_faults = []
 # Remove faults that have not been updated by this amount of time
-fault_timeout = 50
+fault_timeout = 1
 
 # Function to parse BAM TP:CT message
 def parse_tp_ct_message(line):
@@ -73,43 +78,63 @@ def bytes_to_binary_string(byte_list):
     return binary_string
 
 def print_active_faults():
-    if PRINT_ACTIVE_DTCs == False:
+    if PRINT_ACTIVE_DTCs == False or EMULATE_TIME == False:
         return
     print(f'Active Faults:')
     global active_faults
     for fault in active_faults: 
         print(f"        SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
+    # update_active_faults_display()
 
 
 # Function to update the active faults list
-def update_active_faults(src, spn, fmi, oc, timestamp):
+def update_active_faults(src, spn, fmi, oc, float_timestamp):
+    if EMULATE_TIME == False:
+        return
+
     global active_faults
+    updatedExistingFault = False
     for fault in active_faults:
         if fault['src'] == src and fault['spn'] == spn and fault['fmi'] == fmi:
             fault['oc'] = oc
-            fault['last_seen'] = timestamp
-            return False
-    active_faults.append({'src': src, 'spn': spn, 'fmi': fmi, 'oc': oc, 'last_seen': timestamp})
-    if PRINT_ACTIVE_DTCs:
-        print(f'{timestamp} new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
-    return True
+            fault['last_seen'] = float_timestamp
+            updatedExistingFault = True
+
+    # Add new fault 
+    if(updatedExistingFault == False):
+        active_faults.append({'src': src, 'spn': spn, 'fmi': fmi, 'oc': oc, 'last_seen': float_timestamp})
+        if PRINT_NEW_ACTIVE_DTCs:
+            print(f'{float_timestamp} new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
+
+    added_new_faults = not updatedExistingFault
+    return added_new_faults
 
 # Remove faults that have not been updated for a certain time
-def remove_inactive_faults(timestamp):
+def remove_inactive_faults(float_timestamp):
+    if EMULATE_TIME == False:
+        return
+
     global active_faults
     global fault_timeout
-    current_time = timestamp
+    current_time = float_timestamp
     new_active_faults = []
     removed = False
     for fault in active_faults:
         if current_time - fault['last_seen'] <= fault_timeout:
             new_active_faults.append(fault)
         else:
-            if PRINT_ACTIVE_DTCs: 
-                print(f"{timestamp} removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
+            if PRINT_REMOVED_DTCs: 
+                print(f"{float_timestamp} removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
             removed = True
+    
     active_faults = new_active_faults
-    return removed
+    if(removed):
+        # fica em sleep para emular tempo de execucao do log
+        emulate_waiting_time(float_timestamp)
+        # depois do sleep, atualiza
+        update_active_faults_display()
+        print_active_faults()
+   
 
 # Function to parse DM1 message
 def parse_dm1_message(timestamp, src, data_bytes):
@@ -132,15 +157,6 @@ def parse_dm1_message(timestamp, src, data_bytes):
     # aux = binary_str[start : start+7]
     # print('OC_AUX', aux, int(aux, 2))
 
-    float_timestamp = float(timestamp)
-    if EMULATE_TIME:
-        global last_time
-        if last_time != 0:
-            time_diff = float_timestamp - last_time
-            if time_diff > 0:
-                time.sleep(time_diff)
-        last_time = float_timestamp
-
     mil = (data_bytes[0] >> 6) & 0x03 # byte1, 2bits, Malfunction Indicator Lamp status
     rsl = (data_bytes[0] >> 4) & 0x03 # byte1, 2bits, Red Stop Lamp status
     awl = (data_bytes[0] >> 2) & 0x03 # byte1, 2bits, Amber Warning Lamp status
@@ -149,7 +165,7 @@ def parse_dm1_message(timestamp, src, data_bytes):
     if PRINT_DM1_PARSED:
         print(f"DM1 -> Time: {timestamp}, SRC: 0x{src} ({int(src, 16)}), MIL: {mil}, RSL: {rsl}, AWL: {awl}, PL: {pl}")
     
-    new_faults = False
+    added_new_faults = False
     # starting at third byte, iterate 4 bytes each cycle
     j = 1
     for i in range(2, len(data_bytes) - 2, 4):
@@ -160,15 +176,28 @@ def parse_dm1_message(timestamp, src, data_bytes):
         oc = data_bytes[i+3] & 0x7F # #byte6, 7bits, Occurence Counter 
         if PRINT_DM1_PARSED:
             print(f"        DTC[{j}] -> SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}, CM: {cm}, OC: {oc}")
-        if EMULATE_TIME:
-            new_faults = update_active_faults(src, spn, fmi, oc, float_timestamp)
+        
+        if update_active_faults(src, spn, fmi, oc, float(timestamp)):
+            added_new_faults = True
         j += 1
 
-    if EMULATE_TIME:
-        removed_faults = remove_inactive_faults(float_timestamp)
-        if new_faults or removed_faults:
-            print_active_faults()
+    # fica em sleep para emular tempo de execucao do log
+    emulate_waiting_time(float(timestamp))
+    # depois do sleep, atualiza
+    update_active_faults_display()
+    if added_new_faults:
+        print_active_faults()
 
+
+# sleep para emular tempo de execucao do log
+def emulate_waiting_time(float_timestamp):
+    if EMULATE_TIME:
+        global last_time
+        if last_time != 0:
+            time_diff = float_timestamp - last_time
+            if time_diff > 0:
+                time.sleep(time_diff)
+        last_time = float_timestamp
 
 # Main function to read log file and print DTCs from individual frames or from BAM frames
 def read_log_and_print_dtc(file_path):
@@ -184,6 +213,8 @@ def read_log_and_print_dtc(file_path):
                         print(line.strip())
                 
                 parts = line.split()
+                timestamp = parts[0]
+                float_timestamp = float(timestamp)
                 message_id = parts[2]  # CAN ID
                 src = message_id.zfill(8)[6:8] # source, last byte of CAN ID
 
@@ -194,7 +225,6 @@ def read_log_and_print_dtc(file_path):
                     if(spn != 0):
                         if PRINT_DM1_SINGLE_FRAME:
                             print(line.strip())
-                        timestamp = parts[0]
                         parse_dm1_message(timestamp, src, data_bytes)
                 elif is_tp_cm_message_id(message_id):  # Identify BAM message
                     result = parse_tp_ct_message(line)
@@ -262,8 +292,67 @@ def read_log_and_print_dtc(file_path):
                                     current_bams.remove(bam)
                                     break
 
-# Call the function with the path to the log file
-# file_path = 'example_files/test.asc'
+                remove_inactive_faults(float_timestamp)
+
+# Dictionary to store references to treeview items
+treeview_items = {}
+def update_active_faults_display():
+    if EMULATE_TIME == False:
+        return
+
+    global treeview_items
+
+    # Create a set of current fault keys (SRC, SPN, FMI)
+    current_fault_keys = {(fault['src'], fault['spn'], fault['fmi']) for fault in active_faults}
+
+    # Update existing items and add new ones
+    for fault in active_faults:
+        key = (fault['src'], fault['spn'], fault['fmi'])
+        values = (f"0x{fault['src']} ({int(fault['src'], 16)})", f"0x{format(fault['spn'], 'X')} ({fault['spn']})", fault['fmi'], fault['oc'], fault['last_seen'])
+
+        if key in treeview_items:
+            # Update existing item
+            tree.item(treeview_items[key], values=values)
+            tree.item(treeview_items[key], tags=('active',))
+        else:
+            # Insert new item
+            item_id = tree.insert('', 'end', values=values, tags=('active',))
+            treeview_items[key] = item_id
+
+    # Mark items that are no longer active
+    for key in list(treeview_items.keys()):
+        if key not in current_fault_keys:
+            tree.item(treeview_items[key], tags=('inactive',))
+
+
 file_path = 'example_files/VWConstel2024_1.asc'
 # file_path = 'example_files/VWConstel2024_2.asc'
-read_log_and_print_dtc(file_path)
+
+if EMULATE_TIME:
+    # Setup Tkinter window
+    root = tk.Tk()
+    root.title("Active Faults")
+    root.geometry("600x400")
+
+    # Setup treeview
+    columns = ('SRC', 'SPN', 'FMI', 'OC', 'Last Seen')
+    tree = ttk.Treeview(root, columns=columns, show='headings')
+    tree.heading('SRC', text='SRC')
+    tree.heading('SPN', text='SPN')
+    tree.heading('FMI', text='FMI')
+    tree.heading('OC', text='OC')
+    tree.heading('Last Seen', text='Last Seen')
+    tree.pack(fill=tk.BOTH, expand=True)
+    # Configure tag colors
+    tree.tag_configure('active', background='white')
+    tree.tag_configure('inactive', background='lightgrey')
+
+    def read_log_thread(file_path):
+        read_log_and_print_dtc(file_path)
+        root.quit()
+
+    # Call the function with the path to the log file
+    threading.Thread(target=read_log_thread, args=(file_path,)).start()
+    root.mainloop()
+else:
+    read_log_and_print_dtc(file_path)
