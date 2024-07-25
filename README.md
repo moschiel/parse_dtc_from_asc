@@ -3,6 +3,9 @@
 
 **Description**: Parse J1939 Diagnostics Trouble Code (DTC) from CANalyzer ASC logging file.
 
+![image](https://github.com/user-attachments/assets/0cf920b0-2f3a-4ac5-8aae-b8e9b04ca8ec)
+
+
 ## Overview
 
 This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANalyzer ASC logging file, specifically focusing on messages with PGN 0xFECA (DM1). It can handle both single-frame and multi-frame (BAM) messages and maintains a list of active faults, removing them if they are not seen for a specified timeout period. The GUI provides a real-time display of active faults, their status, and an adjustable timeout setting.
