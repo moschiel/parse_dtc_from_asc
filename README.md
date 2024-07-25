@@ -16,8 +16,8 @@ This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANaly
 - Parse multi-frame DM1 messages using BAM (Broadcast Announce Message).
 - Maintain a list of active faults, adding new faults and marking those that are inactive for a specified period.
 - Emulate real-time processing based on timestamps in the log file.
-- GUI display of active faults with dynamic updates.
-- Adjustable fault timeout setting via GUI.
+- GUI display of active faults (white) and inactive faults (gray) with dynamic updates.
+- Adjustable fault timeout setting via GUI to consider inactive fault.
 
 ## Usage
 
