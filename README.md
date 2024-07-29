@@ -32,7 +32,8 @@ This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANaly
    - `PRINT_DM1_PARSED`: Print parsed DM1 messages.
    - `PRINT_ACTIVE_DTCs`: Print active DTCs list.
    - `PRINT_NEW_ACTIVE_DTCs`: Print new active DTCs.
-   - `PRINT_REMOVED_DTCs`: Print removed DTCs.
+   - `PRINT_REMOVED_ACTIVE_DTCs`: Print removed DTCs that was active before.
+   - `PRINT_REMOVED_CANDIDATE_DTCs`: Print removed DTCs that was a candidate before.
 3. Run the script.
 
 ## GUI Display

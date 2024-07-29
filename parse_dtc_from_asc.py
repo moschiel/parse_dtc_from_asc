@@ -18,17 +18,22 @@ PRINT_INCORRET_ORDER = False
 PRINT_DM1_PARSED = False
 PRINT_ACTIVE_DTCs = False
 PRINT_NEW_ACTIVE_DTCs = False
-PRINT_REMOVED_DTCs = False
+PRINT_REMOVED_ACTIVE_DTCs = False
+PRINT_REMOVED_CANDIDATE_DTCs = False
 
-# control variable for emulating time
+# Control variables for emulating time and display
 EMULATE_TIME = True
 DISPLAY_SCREEN = True
-# To keep track of the last timestamp for time emulation  
 last_time = 0.0 
+
 # List to store active faults
+candidate_faults = []
 active_faults = []
 # Remove faults that have not been updated by this amount of time
-debounce_fault_inactive = 1
+debounce_fault_inactive = 10
+debounce_fault_active_count = 3  # Number of occurrences to consider fault active
+debounce_fault_active_time = 5  # Time window in seconds to consider fault active
+
 # Variable to store the last displayed timestamp
 last_displayed_timestamp = 0.0
 
@@ -91,12 +96,12 @@ def print_active_faults():
     for fault in active_faults: 
         print(f"        SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}, MIL: {fault['mil']}, RSL: {fault['rsl']}, AWL: {fault['awl']}, PL: {fault['pl']}")
 
-
 # Function to update the active faults list
 def update_active_faults(src, spn, fmi, oc, mil, rsl, awl, pl, float_timestamp):
     if EMULATE_TIME == False:
         return
 
+    # Update if exist on list already
     global active_faults
     updatedExistingFault = False
     for fault in active_faults:
@@ -107,11 +112,34 @@ def update_active_faults(src, spn, fmi, oc, mil, rsl, awl, pl, float_timestamp):
             fault['awl'] = awl
             fault['pl'] = pl
             fault['last_seen'] = float_timestamp
+            if(fault['status'] == 'candidate'):
+                fault['occurrences'] += 1
             updatedExistingFault = True
 
-    # Add new fault 
-    if(updatedExistingFault == False):
-        active_faults.append({'src': src, 'spn': spn, 'fmi': fmi, 'oc': oc, 'mil': mil, 'rsl': rsl, 'awl': awl, 'pl': pl, 'last_seen': float_timestamp})
+    # Add new candidate fault to the fault list
+    if not updatedExistingFault:
+        active_faults.append({
+            'src': src,
+            'spn': spn,
+            'fmi': fmi,
+            'oc': oc,
+            'mil': mil,
+            'rsl': rsl,
+            'awl': awl,
+            'pl': pl,
+            'last_seen': float_timestamp,
+            'first_seen': float_timestamp,
+            'occurrences': 1,
+            'status': 'candidate'
+        })
+    
+    # Verify if 'candidate' fault is elegible to become 'active'
+    for fault in active_faults:
+        if(fault['status'] == 'candidate'): # is candidate
+            if((float_timestamp - fault['first_seen']) <= debounce_fault_active_time): # if debounce active timeout
+                if(fault['occurrences'] >= debounce_fault_active_count): #if has the minimum amount of occurrences
+                    fault['status'] = 'active' # set as active
+
         if PRINT_NEW_ACTIVE_DTCs:
             print(f'{float_timestamp} new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
 
@@ -119,6 +147,7 @@ def update_active_faults(src, spn, fmi, oc, mil, rsl, awl, pl, float_timestamp):
     return added_new_faults
 
 # Remove faults that have not been updated for a certain time
+# or if they are not 'candidate' anymore
 def remove_inactive_faults(float_timestamp):
     if EMULATE_TIME == False:
         return
@@ -129,60 +158,45 @@ def remove_inactive_faults(float_timestamp):
     new_active_faults = []
     removed = False
     for fault in active_faults:
-        if current_time - fault['last_seen'] <= debounce_fault_inactive:
-            new_active_faults.append(fault)
-        else:
-            if PRINT_REMOVED_DTCs: 
-                print(f"{float_timestamp} removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
-            removed = True
+        if(fault['status'] == 'candidate'): # candidate fault, do not keep on list if it is not a candidate anymore
+            if((float_timestamp - fault['first_seen']) <= debounce_fault_active_time):
+                new_active_faults.append(fault)
+            else:
+                if PRINT_REMOVED_CANDIDATE_DTCs: 
+                    print(f"{float_timestamp} removed CANDIDATE fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
+                removed = True
+        else: # active fault, do not keep on list if it is not active anymore
+            if current_time - fault['last_seen'] <= debounce_fault_inactive:
+                new_active_faults.append(fault)
+            else:
+                if PRINT_REMOVED_ACTIVE_DTCs: 
+                    print(f"{float_timestamp} removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
+                removed = True
     
     active_faults = new_active_faults
-    if(removed):
-        # fica em sleep para emular tempo de execucao do log
+    if removed:
         emulate_waiting_time(float_timestamp)
-        # depois do sleep, atualiza
         update_active_faults_display()
         print_active_faults()
-   
 
 # Function to parse DM1 message
 def parse_dm1_message(timestamp, src, data_bytes):
-    # print(data_bytes)
-    # binary_str = bytes_to_binary_string(data_bytes)
-    # print(binary_str)
-    # spn_start = 2*8
-    # spn1 = binary_str[spn_start: spn_start + 8]
-    # #print('SPN 1', spn1)
-    # spn2 = binary_str[spn_start + 8: spn_start + 16]
-    # #print('SPN 2', spn2)
-    # spn3 = binary_str[spn_start + 16: spn_start + 16 + 3]
-    # # print('SPN 3', spn3)
-    # spn = spn3 + spn2 + spn1
-    # print('SPN', spn, int(spn,2), hex(int(spn, 2)))
-    # start = (4*8)+3
-    # aux = binary_str[start : start+5]
-    # print('FMI_AUX', aux, int(aux, 2))
-    # start = (5*8)+1
-    # aux = binary_str[start : start+7]
-    # print('OC_AUX', aux, int(aux, 2))
-
-    mil = (data_bytes[0] >> 6) & 0x03 # byte1, 2bits, Malfunction Indicator Lamp status
-    rsl = (data_bytes[0] >> 4) & 0x03 # byte1, 2bits, Red Stop Lamp status
-    awl = (data_bytes[0] >> 2) & 0x03 # byte1, 2bits, Amber Warning Lamp status
-    pl = data_bytes[0] & 0x03 # byte1, 2bits, Protect Lamp status
-    rfu = data_bytes[1] # byte2, reserved
+    mil = (data_bytes[0] >> 6) & 0x03  # byte1, 2bits, Malfunction Indicator Lamp status
+    rsl = (data_bytes[0] >> 4) & 0x03  # byte1, 2bits, Red Stop Lamp status
+    awl = (data_bytes[0] >> 2) & 0x03  # byte1, 2bits, Amber Warning Lamp status
+    pl = data_bytes[0] & 0x03          # byte1, 2bits, Protect Lamp status
+    rfu = data_bytes[1]                # byte2, reserved
     if PRINT_DM1_PARSED:
         print(f"DM1 -> Time: {timestamp}, SRC: 0x{src} ({int(src, 16)}), MIL: {mil}, RSL: {rsl}, AWL: {awl}, PL: {pl}")
     
     added_new_faults = False
-    # starting at third byte, iterate 4 bytes each cycle
+    # Starting at third byte, iterate 4 bytes each cycle
     j = 1
     for i in range(2, len(data_bytes) - 2, 4):
-        # (byte5,3bits)<<16 | (byte4) << 8 | byte3
-        spn = (((data_bytes[i+2] >> 5) & 0x7) << 16) | ((data_bytes[i+1] << 8) & 0xFF00) | data_bytes[i]
-        fmi = data_bytes[i+2] & 0x1F # byte5, 5bits, Failure Module Indicator
-        cm = (data_bytes[i+3] >> 7) & 0x01 # byte6, 1bit, Conversion Method
-        oc = data_bytes[i+3] & 0x7F # #byte6, 7bits, Occurence Counter 
+        spn = (((data_bytes[i + 2] >> 5) & 0x7) << 16) | ((data_bytes[i + 1] << 8) & 0xFF00) | data_bytes[i]
+        fmi = data_bytes[i + 2] & 0x1F  # byte5, 5bits, Failure Module Indicator
+        cm = (data_bytes[i + 3] >> 7) & 0x01  # byte6, 1bit, Conversion Method
+        oc = data_bytes[i + 3] & 0x7F  # byte6, 7bits, Occurrence Counter 
         if PRINT_DM1_PARSED:
             print(f"        DTC[{j}] -> SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}, CM: {cm}, OC: {oc}")
         
@@ -190,15 +204,12 @@ def parse_dm1_message(timestamp, src, data_bytes):
             added_new_faults = True
         j += 1
 
-    # fica em sleep para emular tempo de execucao do log
     emulate_waiting_time(float(timestamp))
-    # depois do sleep, atualiza
     update_active_faults_display()
     if added_new_faults:
         print_active_faults()
 
-
-# sleep para emular tempo de execucao do log
+# Sleep to emulate log execution time
 def emulate_waiting_time(float_timestamp):
     if EMULATE_TIME:
         global last_time
@@ -223,8 +234,6 @@ def read_log_and_print_dtc(file_path):
     with open(file_path, 'r') as file:
         for line in file:
             if 'Rx' in line:
-                # Data that was split into multiple packets, concatenated and provided by the log itself under 'J1939TP'
-                # printamos apenas para comparar com nossa logica de concatenacao
                 if 'J1939TP FECAp' in line:  
                     if PRINT_J1939TP_FECAp:
                         print(line.strip())
@@ -235,13 +244,12 @@ def read_log_and_print_dtc(file_path):
                 update_screen_time(float_timestamp)
 
                 message_id = parts[2]  # CAN ID
-                src = message_id.zfill(8)[6:8] # source, last byte of CAN ID
+                src = message_id.zfill(8)[6:8]  # source, last byte of CAN ID
 
-                if(is_dm1_message_id(message_id)):
-                    #Parse single FECA frame
+                if is_dm1_message_id(message_id):
                     data_bytes = [int(b, 16) for b in parts[6:14]]
                     spn = (((data_bytes[4] >> 5) & 0x7) << 16) | ((data_bytes[3] << 8) & 0xFF00) | data_bytes[2]
-                    if(spn != 0):
+                    if spn != 0:
                         if PRINT_DM1_SINGLE_FRAME:
                             print(line.strip())
                         parse_dm1_message(timestamp, src, data_bytes)
@@ -250,19 +258,15 @@ def read_log_and_print_dtc(file_path):
                     if result:
                         timestamp, message_id, total_size, num_packets, pgn = result
 
-                        # If it is not DM1 (0xFECA), ignore it
-                        if pgn != 65226: 
+                        if pgn != 65226:  # If it is not DM1 (0xFECA), ignore it
                             continue
 
-                        # Replace 'EC' for 'EB' to obtain message_id_tp_ct
                         message_id_tp_ct = message_id.replace('EC', 'EB', 1)
 
-                        # Remove older BAMs with the same message_id
                         for bam in current_bams:
                             if bam['message_id'] == message_id:
                                 current_bams.remove(bam)
 
-                        # Add new BAM to the list
                         current_bams.append({
                             'timestamp': timestamp,
                             'message_id': message_id,
@@ -281,7 +285,6 @@ def read_log_and_print_dtc(file_path):
                         if PRINT_TP_DT:
                             print(f"TP.DT ->  Time: {timestamp}, ID: {message_id}, Packet Number: {packet_number}, Data: {' '.join(data)}")
                         
-                        # Check if all packets were received
                         for bam in current_bams:
                             if bam['message_id_tp_ct'] == message_id:
                                 if packet_number != (len(bam['packets']) + 1):
@@ -292,22 +295,18 @@ def read_log_and_print_dtc(file_path):
 
                                 bam['packets'].append((packet_number, data))
                                 if len(bam['packets']) == bam['num_packets']:
-                                    # Order packets by packet number
                                     bam['packets'].sort()
                                     combined_data = []
                                     for packet in bam['packets']:
                                         combined_data.extend(packet[1])
-                                    # Limit the size of the combined data
                                     combined_data = combined_data[:bam['total_size']]
 
                                     if PRINT_TP_DM1_MULTI_FRAME:
                                         print(f"TP -> Time: {bam['timestamp']}, ID: {bam['message_id']}, Size: {bam['total_size']}, Data: {' '.join(combined_data)}")
                                     
-                                    # Converts string list to bytes list
                                     data_bytes = [int(b, 16) for b in combined_data]
                                     parse_dm1_message(timestamp, src, data_bytes)
                                     
-                                    # Remove the parsed BAM from list
                                     current_bams.remove(bam)
                                     break
 
@@ -321,79 +320,83 @@ def update_active_faults_display():
 
     global treeview_items
 
-    # Create a set of current fault keys (SRC, SPN, FMI)
     current_fault_keys = {(fault['src'], fault['spn'], fault['fmi']) for fault in active_faults}
 
-    # Update existing items and add new ones
     for fault in active_faults:
         key = (fault['src'], fault['spn'], fault['fmi'])
-        values = (f"0x{fault['src']} ({int(fault['src'], 16)})", f"0x{format(fault['spn'], 'X')} ({fault['spn']})", fault['fmi'], fault['oc'], fault['mil'], fault['rsl'], fault['awl'], fault['pl'], fault['last_seen'])
+        values = (
+            f"0x{fault['src']} ({int(fault['src'], 16)})", 
+            f"0x{format(fault['spn'], 'X')} ({fault['spn']})", 
+            fault['fmi'], 
+            fault['oc'], 
+            fault['mil'], 
+            fault['rsl'], 
+            fault['awl'], 
+            fault['pl'], 
+            fault['last_seen'],
+            fault['status']
+        )
+
+        tag = fault['status']
 
         if key in treeview_items:
-            # Update existing item
             tree.item(treeview_items[key], values=values)
-            tree.item(treeview_items[key], tags=('active',))
+            tree.item(treeview_items[key], tags=(tag,))
         else:
-            # Insert new item
-            item_id = tree.insert('', 'end', values=values, tags=('active',))
+            item_id = tree.insert('', 'end', values=values, tags=(tag,))
             treeview_items[key] = item_id
 
-    # Mark items that are no longer active
     for key in list(treeview_items.keys()):
         if key not in current_fault_keys:
+            values = tree.item(treeview_items[key], 'values')
+            tree.item(treeview_items[key], values=(*values[:-1], 'inactive'))
             tree.item(treeview_items[key], tags=('inactive',))
 
-
-
 if EMULATE_TIME and DISPLAY_SCREEN:
-    # Setup Tkinter window
     root = tk.Tk()
     root.title("Active Faults")
     root.geometry("800x400")
 
-    # Setup treeview
-    columns = ('SRC', 'SPN', 'FMI', 'OC', 'MIL', 'RSL', 'AWL', 'PL', 'Last Seen')
+    columns = ('SRC', 'SPN', 'FMI', 'OC', 'MIL', 'RSL', 'AWL', 'PL', 'Last Seen', 'Status')
     tree = ttk.Treeview(root, columns=columns, show='headings')
-    tree.heading('SRC', text='SRC')
-    tree.heading('SPN', text='SPN')
-    tree.heading('FMI', text='FMI')
-    tree.heading('OC', text='OC')
-    tree.heading('MIL', text='MIL')
-    tree.heading('RSL', text='RSL')
-    tree.heading('AWL', text='AWL')
-    tree.heading('PL', text='PL')
-    tree.heading('Last Seen', text='Last Seen')
-    tree.column('SRC', width=40)        # Adjust width as needed
-    tree.column('SPN', width=80)        # Adjust width as needed
-    tree.column('FMI', width=30)        # Adjust width as needed
-    tree.column('OC', width=30)         # Adjust width as needed
-    tree.column('MIL', width=30)        # Adjust width as needed
-    tree.column('RSL', width=30)        # Adjust width as needed
-    tree.column('AWL', width=30)        # Adjust width as needed
-    tree.column('PL', width=30)         # Adjust width as needed
-    tree.column('Last Seen', width=60) # Adjust width as needed
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=80)
     tree.pack(fill=tk.BOTH, expand=True)
-    # Configure tag colors
-    tree.tag_configure('active', background='white')
+    
+    tree.tag_configure('active', background='lightgreen')
     tree.tag_configure('inactive', background='lightgrey')
+    tree.tag_configure('candidate', background='white')
 
-    # Add a label to display the timestamp
     timestamp_label = tk.Label(root, text="Time: 0s")
     timestamp_label.pack()
 
-    # Add a label and entry to change debounce_fault_inactive
     debounce_inactive_label = tk.Label(root, text="Debounce Fault Inactive (seconds):")
     debounce_inactive_label.pack()
     debounce_inactive_entry = tk.Entry(root)
     debounce_inactive_entry.pack()
     debounce_inactive_entry.insert(0, str(debounce_fault_inactive))
 
+    debounce_active_count_label = tk.Label(root, text="Debounce Fault Active Count:")
+    debounce_active_count_label.pack()
+    debounce_active_count_entry = tk.Entry(root)
+    debounce_active_count_entry.pack()
+    debounce_active_count_entry.insert(0, str(debounce_fault_active_count))
+
+    debounce_active_time_label = tk.Label(root, text="Debounce Fault Active Time (seconds):")
+    debounce_active_time_label.pack()
+    debounce_active_time_entry = tk.Entry(root)
+    debounce_active_time_entry.pack()
+    debounce_active_time_entry.insert(0, str(debounce_fault_active_time))
+
     def update_configs():
-        global debounce_fault_inactive
+        global debounce_fault_inactive, debounce_fault_active_count, debounce_fault_active_time
         try:
             debounce_fault_inactive = float(debounce_inactive_entry.get())
+            debounce_fault_active_count = int(debounce_active_count_entry.get())
+            debounce_fault_active_time = float(debounce_active_time_entry.get())
         except ValueError:
-            pass  # Ignore invalid input
+            pass
 
     configs_button = tk.Button(root, text="Update Configs", command=update_configs)
     configs_button.pack()
@@ -402,7 +405,6 @@ if EMULATE_TIME and DISPLAY_SCREEN:
         read_log_and_print_dtc(file_path)
         root.quit()
 
-    # Call the function with the path to the log file
     threading.Thread(target=read_log_thread, args=(file_path,)).start()
     root.mainloop()
 else:
