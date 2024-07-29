@@ -40,6 +40,17 @@ last_displayed_timestamp = 0.0
 # Flag to stop the thread
 stop_thread = False
 
+# Dictionary to store source descriptions
+source_descriptions = {}
+
+# Function to load source descriptions from file
+def load_source_descriptions(file_path):
+    global source_descriptions
+    with open(file_path, 'r') as file:
+        for line in file:
+            parts = line.strip().split(',')
+            source_descriptions[int(parts[0])] = parts[1]
+
 # Function to parse BAM TP:CT message
 def parse_tp_ct_message(line):
     parts = line.split()
@@ -355,8 +366,9 @@ def update_active_faults_display():
 
     for fault in active_faults:
         key = (fault['src'], fault['spn'], fault['fmi'])
+        src_description = source_descriptions.get(int(fault['src'], 16), "")
         values = (
-            f"0x{fault['src']} ({int(fault['src'], 16)})", 
+            f"0x{fault['src']} ({int(fault['src'], 16)}) - {src_description}", 
             f"0x{format(fault['spn'], 'X')} ({fault['spn']})", 
             fault['fmi'],
             fault['cm'], 
@@ -384,10 +396,13 @@ def update_active_faults_display():
             tree.item(treeview_items[key], values=(*values[:-1], 'inactive'))
             tree.item(treeview_items[key], tags=('inactive',))
 
+# Load source descriptions at the start
+load_source_descriptions('sources.txt')
+
 if EMULATE_TIME and DISPLAY_SCREEN:
     root = tk.Tk()
     root.title("Active Faults")
-    root.geometry("800x400")
+    root.geometry("900x400")
 
     columns = ('SRC', 'SPN', 'FMI', 'CM', 'OC', 'MIL', 'RSL', 'AWL', 'PL', 'Last Seen', 'Status')
     tree = ttk.Treeview(root, columns=columns, show='headings')
@@ -436,7 +451,6 @@ if EMULATE_TIME and DISPLAY_SCREEN:
     progress_var = tk.DoubleVar()
     progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
     progress_bar.pack(fill=tk.X, expand=True)
-
 
     end_time = get_end_time(file_path)
 
