@@ -178,7 +178,6 @@ def remove_inactive_faults(float_timestamp):
     
     active_faults = new_active_faults
     if removed:
-        emulate_waiting_time(float_timestamp)
         update_active_faults_display()
         print_active_faults()
 
@@ -207,7 +206,6 @@ def parse_dm1_message(timestamp, src, data_bytes):
             added_new_faults = True
         j += 1
 
-    emulate_waiting_time(float(timestamp))
     update_active_faults_display()
     if added_new_faults:
         print_active_faults()
@@ -266,6 +264,7 @@ def read_log_and_print_dtc(file_path):
             parts = line.split()
             timestamp = parts[0]
             float_timestamp = float(timestamp)
+            emulate_waiting_time(float_timestamp)
             update_screen_time(float_timestamp)
             
             if 'Rx' in line:
