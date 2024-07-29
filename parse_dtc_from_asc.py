@@ -100,7 +100,7 @@ def print_active_faults():
         print(f"        SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}, MIL: {fault['mil']}, RSL: {fault['rsl']}, AWL: {fault['awl']}, PL: {fault['pl']}")
 
 # Function to update the active faults list
-def update_active_faults(src, spn, fmi, oc, mil, rsl, awl, pl, float_timestamp):
+def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float_timestamp):
     if EMULATE_TIME == False:
         return
 
@@ -109,6 +109,7 @@ def update_active_faults(src, spn, fmi, oc, mil, rsl, awl, pl, float_timestamp):
     updatedExistingFault = False
     for fault in active_faults:
         if fault['src'] == src and fault['spn'] == spn and fault['fmi'] == fmi:
+            fault['cm'] = cm
             fault['oc'] = oc
             fault['mil'] = mil
             fault['rsl'] = rsl
@@ -125,6 +126,7 @@ def update_active_faults(src, spn, fmi, oc, mil, rsl, awl, pl, float_timestamp):
             'src': src,
             'spn': spn,
             'fmi': fmi,
+            'cm': cm,
             'oc': oc,
             'mil': mil,
             'rsl': rsl,
@@ -202,7 +204,7 @@ def parse_dm1_message(timestamp, src, data_bytes):
         if PRINT_DM1_PARSED:
             print(f"        DTC[{j}] -> SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}, CM: {cm}, OC: {oc}")
         
-        if update_active_faults(src, spn, fmi, oc, mil, rsl, awl, pl, float(timestamp)):
+        if update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float(timestamp)):
             added_new_faults = True
         j += 1
 
@@ -356,7 +358,8 @@ def update_active_faults_display():
         values = (
             f"0x{fault['src']} ({int(fault['src'], 16)})", 
             f"0x{format(fault['spn'], 'X')} ({fault['spn']})", 
-            fault['fmi'], 
+            fault['fmi'],
+            fault['cm'], 
             fault['oc'], 
             fault['mil'], 
             fault['rsl'], 
@@ -386,7 +389,7 @@ if EMULATE_TIME and DISPLAY_SCREEN:
     root.title("Active Faults")
     root.geometry("800x400")
 
-    columns = ('SRC', 'SPN', 'FMI', 'OC', 'MIL', 'RSL', 'AWL', 'PL', 'Last Seen', 'Status')
+    columns = ('SRC', 'SPN', 'FMI', 'CM', 'OC', 'MIL', 'RSL', 'AWL', 'PL', 'Last Seen', 'Status')
     tree = ttk.Treeview(root, columns=columns, show='headings')
     for col in columns:
         tree.heading(col, text=col)
