@@ -250,20 +250,28 @@ def get_end_time(file_path):
 # Main function to read log file and print DTCs from individual frames or from BAM frames
 def read_log_and_print_dtc(file_path):
     current_bams = []  # List to store current BAM messages
+    started_measurement = False
 
     with open(file_path, 'r') as file:
         for line in file:
             if stop_thread:
                 break
+
+            if started_measurement == False:
+                if 'Start of measurement' in line:
+                    started_measurement = True
+                else:
+                    continue
+
+            parts = line.split()
+            timestamp = parts[0]
+            float_timestamp = float(timestamp)
+            update_screen_time(float_timestamp)
+            
             if 'Rx' in line:
                 if 'J1939TP FECAp' in line:  
                     if PRINT_J1939TP_FECAp:
                         print(line.strip())
-                
-                parts = line.split()
-                timestamp = parts[0]
-                float_timestamp = float(timestamp)
-                update_screen_time(float_timestamp)
 
                 message_id = parts[2]  # CAN ID
                 src = message_id.zfill(8)[6:8]  # source, last byte of CAN ID
