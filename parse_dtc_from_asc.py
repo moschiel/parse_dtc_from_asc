@@ -30,9 +30,9 @@ last_time = 0.0
 candidate_faults = []
 active_faults = []
 # Remove faults that have not been updated by this amount of time
-debounce_fault_inactive = 10
-debounce_fault_active_count = 3  # Number of occurrences to consider fault active
-debounce_fault_active_time = 5  # Time window in seconds to consider fault active
+debounce_fault_inactive = 20
+debounce_fault_active_count = 10  # Number of occurrences to consider fault active
+debounce_fault_active_time = 10  # Time window in seconds to consider fault active
 
 # Variable to store the last displayed timestamp
 last_displayed_timestamp = 0.0
@@ -229,8 +229,12 @@ def update_screen_time(float_timestamp):
     if float_timestamp - last_displayed_timestamp >= 1:
         last_displayed_timestamp = float_timestamp
         timestamp_label.config(text=f"Time: {int(float_timestamp)}s")
-        progress_var.set((float_timestamp / end_time) * 100)
+        percent = (float_timestamp / end_time) * 100
+        progress_var.set(percent)
         root.update_idletasks()
+        if(percent >= 100):
+            global stop_thread
+            stop_thread = True
 
 # Function to get the end timestamp from the log file
 def get_end_time(file_path):
