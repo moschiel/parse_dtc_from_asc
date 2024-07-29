@@ -37,6 +37,9 @@ debounce_fault_active_time = 5  # Time window in seconds to consider fault activ
 # Variable to store the last displayed timestamp
 last_displayed_timestamp = 0.0
 
+# Flag to stop the thread
+stop_thread = False
+
 # Function to parse BAM TP:CT message
 def parse_tp_ct_message(line):
     parts = line.split()
@@ -226,6 +229,19 @@ def update_screen_time(float_timestamp):
     if float_timestamp - last_displayed_timestamp >= 1:
         last_displayed_timestamp = float_timestamp
         timestamp_label.config(text=f"Time: {int(float_timestamp)}s")
+        progress_var.set((float_timestamp / end_time) * 100)
+        root.update_idletasks()
+
+# Function to get the end timestamp from the log file
+def get_end_time(file_path):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+        for line in reversed(lines):
+            if 'Rx' in line:
+                parts = line.split()
+                timestamp = float(parts[0])
+                return timestamp
+    return 0
 
 # Main function to read log file and print DTCs from individual frames or from BAM frames
 def read_log_and_print_dtc(file_path):
@@ -233,6 +249,8 @@ def read_log_and_print_dtc(file_path):
 
     with open(file_path, 'r') as file:
         for line in file:
+            if stop_thread:
+                break
             if 'Rx' in line:
                 if 'J1939TP FECAp' in line:  
                     if PRINT_J1939TP_FECAp:
@@ -401,11 +419,25 @@ if EMULATE_TIME and DISPLAY_SCREEN:
     configs_button = tk.Button(root, text="Update Configs", command=update_configs)
     configs_button.pack()
 
+    progress_var = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
+    progress_bar.pack(fill=tk.X, expand=True)
+
+
+    end_time = get_end_time(file_path)
+
     def read_log_thread(file_path):
         read_log_and_print_dtc(file_path)
         root.quit()
 
     threading.Thread(target=read_log_thread, args=(file_path,)).start()
+
+    def on_closing():
+        global stop_thread
+        stop_thread = True
+        root.quit()
+
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
 else:
     read_log_and_print_dtc(file_path)
