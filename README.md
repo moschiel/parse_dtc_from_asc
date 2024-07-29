@@ -5,16 +5,16 @@
 
 ## Overview
 
-This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANalyzer ASC logging file, specifically focusing on messages with PGN 0xFECA (DM1). It can handle both single-frame and multi-frame (BAM) messages and maintains a list of active faults, removing them if they are not seen for a specified timeout period. The GUI provides a real-time display of active faults, their status, and an adjustable timeout setting.
+This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANalyzer ASC logging file, specifically focusing on messages with PGN 0xFECA (DM1). It can handle both single-frame and multi-frame (BAM) messages and maintains a list of active faults, removing them if they are not seen for a specified period (debounce inactive). The GUI provides a real-time display of active faults, their status, and an adjustable timeout setting.
 
 ## Features
 
 - Parse single-frame DM1 messages.
 - Parse multi-frame DM1 messages using BAM (Broadcast Announce Message).
-- Maintain a list of active faults, adding new faults and marking those that are inactive for a specified period.
+- Maintain a list of active faults, adding new faults and marking those that are inactive for a specified period (debounce inactive).
 - Emulate real-time processing based on timestamps in the log file.
 - GUI display of active faults with dynamic updates.
-- Adjustable fault timeout setting via GUI.
+- Adjustable debounce inactive time setting via GUI.
 
 ## Usage
 
@@ -49,7 +49,7 @@ The GUI displays the following columns for each active fault:
 ### GUI Elements
 
 - **Timestamp Display**: Shows the current emulated time in seconds.
-- **Fault Timeout**: An entry field and button to adjust the fault timeout duration.
+- **Debounce Inactive Fault**: An entry field and button to adjust the debounce inactive fault duration.
 
 ### Example GUI
 
@@ -58,7 +58,7 @@ To emulate the log processing time and manage the active faults list with GUI di
 ```python
 EMULATE_TIME = True  # Enable time emulation
 DISPLAY_SCREEN = True  # Enable GUI display
-fault_timeout = 10   # Set the timeout for removing inactive faults
+debounce_fault_inactive = 10   # Set the timeout for removing inactive faults
 
 # Call the function with the path to the log file
 file_path = 'example_files/VWConstel2024_1.asc'
@@ -105,7 +105,7 @@ To emulate the log processing time and manage the active faults list:
 
 ```python
 EMULATE_TIME = True  # Enable time emulation
-fault_timeout = 50   # Set the timeout for removing inactive faults
+debounce_fault_inactive = 50   # Set the timeout for removing inactive faults
 
 # Call the function with the path to the log file
 file_path = 'example_files/VWConstel2024_1.asc'

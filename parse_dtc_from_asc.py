@@ -5,6 +5,9 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
+file_path = 'example_files/VWConstel2024_1.asc'
+# file_path = 'example_files/VWConstel2024_2.asc'
+
 # Print control variables
 PRINT_DM1_SINGLE_FRAME = False
 PRINT_TP_CT = False
@@ -25,7 +28,7 @@ last_time = 0.0
 # List to store active faults
 active_faults = []
 # Remove faults that have not been updated by this amount of time
-fault_timeout = 1
+debounce_fault_inactive = 1
 # Variable to store the last displayed timestamp
 last_displayed_timestamp = 0.0
 
@@ -121,12 +124,12 @@ def remove_inactive_faults(float_timestamp):
         return
 
     global active_faults
-    global fault_timeout
+    global debounce_fault_inactive
     current_time = float_timestamp
     new_active_faults = []
     removed = False
     for fault in active_faults:
-        if current_time - fault['last_seen'] <= fault_timeout:
+        if current_time - fault['last_seen'] <= debounce_fault_inactive:
             new_active_faults.append(fault)
         else:
             if PRINT_REMOVED_DTCs: 
@@ -341,8 +344,6 @@ def update_active_faults_display():
             tree.item(treeview_items[key], tags=('inactive',))
 
 
-file_path = 'example_files/VWConstel2024_1.asc'
-# file_path = 'example_files/VWConstel2024_2.asc'
 
 if EMULATE_TIME and DISPLAY_SCREEN:
     # Setup Tkinter window
@@ -380,22 +381,22 @@ if EMULATE_TIME and DISPLAY_SCREEN:
     timestamp_label = tk.Label(root, text="Time: 0s")
     timestamp_label.pack()
 
-    # Add a label and entry to change fault_timeout
-    timeout_label = tk.Label(root, text="Fault Timeout (seconds):")
-    timeout_label.pack()
-    timeout_entry = tk.Entry(root)
-    timeout_entry.pack()
-    timeout_entry.insert(0, str(fault_timeout))
+    # Add a label and entry to change debounce_fault_inactive
+    debounce_inactive_label = tk.Label(root, text="Debounce Fault Inactive (seconds):")
+    debounce_inactive_label.pack()
+    debounce_inactive_entry = tk.Entry(root)
+    debounce_inactive_entry.pack()
+    debounce_inactive_entry.insert(0, str(debounce_fault_inactive))
 
-    def update_timeout():
-        global fault_timeout
+    def update_configs():
+        global debounce_fault_inactive
         try:
-            fault_timeout = float(timeout_entry.get())
+            debounce_fault_inactive = float(debounce_inactive_entry.get())
         except ValueError:
             pass  # Ignore invalid input
 
-    timeout_button = tk.Button(root, text="Update Timeout", command=update_timeout)
-    timeout_button.pack()
+    configs_button = tk.Button(root, text="Update Configs", command=update_configs)
+    configs_button.pack()
 
     def read_log_thread(file_path):
         read_log_and_print_dtc(file_path)
