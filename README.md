@@ -19,7 +19,7 @@ This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANaly
 - Maintain a list of active faults, adding new faults and marking those that are inactive for a specified period (debounce inactive).
 - Emulate real-time processing based on timestamps in the log file.
 - GUI display of active faults (white) , inactive faults (gray), and candidate faults (white), with dynamic updates.
-- Adjustable debounce inactive time setting via GUI.
+- GUI adjustable debounce time setting for a fault to become 'active' or 'inactive' .
 
 ## Usage
 
