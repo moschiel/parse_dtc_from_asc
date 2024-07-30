@@ -18,7 +18,7 @@ This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANaly
 - Parse multi-frame DM1 messages using BAM (Broadcast Announce Message).
 - Maintain a list of active faults, adding new faults and marking those that are inactive for a specified period (debounce inactive).
 - Emulate real-time processing based on timestamps in the log file.
-- GUI display of active faults (white) and inactive faults (gray) with dynamic updates.
+- GUI display of active faults (white) , inactive faults (gray), and candidate faults (white), with dynamic updates.
 - Adjustable debounce inactive time setting via GUI.
 
 ## Usage
@@ -45,6 +45,7 @@ The GUI displays the following columns for each active fault:
 - `SRC`: Source Address
 - `SPN`: Suspect Parameter Number
 - `FMI`: Failure Mode Identifier
+- 'CM': SPN Conversion Method
 - `OC`: Occurrence Count
 - `MIL`: Malfunction Indicator Lamp status
 - `RSL`: Red Stop Lamp status
@@ -55,21 +56,9 @@ The GUI displays the following columns for each active fault:
 ### GUI Elements
 
 - **Timestamp Display**: Shows the current emulated time in seconds.
-- **Debounce Inactive Fault**: An entry field and button to adjust the debounce inactive fault duration.
-
-### Example GUI
-
-To emulate the log processing time and manage the active faults list with GUI display:
-
-```python
-EMULATE_TIME = True  # Enable time emulation
-DISPLAY_SCREEN = True  # Enable GUI display
-debounce_fault_inactive = 10   # Set the timeout for removing inactive faults
-
-# Call the function with the path to the log file
-file_path = 'example_files/VWConstel2024_1.asc'
-read_log_and_print_dtc(file_path)
-```
+- **Debounce Inactive Fault**: An entry field to adjust the debounce duration for a fault to change from 'active' to 'inactive'.
+- **Debounce Active Fault**: An entry field to adjust the debounce active window for a fault to change from 'candidate' to 'active'.
+- **Debounce Active Count**: An entry field to adjust how many times a fault code must be read in order to change from 'candidate' to 'active' within the debounce active window.
 
 ## Output Format
 
@@ -104,18 +93,3 @@ DM1 -> Time: 110.945338, SRC: 0x03 (3), MIL: 3, RSL: 1, AWL: 1, PL: 0
   Active Faults:
         SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}
   ```
-
-## Example Run
-
-To emulate the log processing time and manage the active faults list:
-
-```python
-EMULATE_TIME = True  # Enable time emulation
-debounce_fault_inactive = 50   # Set the timeout for removing inactive faults
-
-# Call the function with the path to the log file
-file_path = 'example_files/VWConstel2024_1.asc'
-read_log_and_print_dtc(file_path)
-```
-
-This will process the log file, parse the DTC messages, manage the active faults list, and print the results based on the specified print control variables.
