@@ -40,16 +40,46 @@ last_displayed_timestamp = 0.0
 # Flag to stop the thread
 stop_thread = False
 
-# Dictionary to store source descriptions
+# Dictionary to store descriptions
 source_descriptions = {}
+spn_descriptions = {}
+fmi_descriptions = {}
 
-# Function to load source descriptions from file
+# Function to load SOURCE descriptions from file
 def load_source_descriptions(file_path):
     global source_descriptions
     with open(file_path, 'r') as file:
         for line in file:
-            parts = line.strip().split(',')
-            source_descriptions[int(parts[0])] = parts[1]
+            try:
+                parts = line.strip().split(';')
+                source_descriptions[int(parts[0])] = parts[1]
+            except Exception as ex:
+                print(f"load_source_descriptions, line: {line}, error: {ex}")
+                sys.exit()
+
+# Function to load SPN descriptions from file
+def load_spn_descriptions(file_path):
+    global spn_descriptions
+    with open(file_path, 'r') as file:
+        for line in file:
+            try:
+                parts = line.strip().split(';')
+                spn_descriptions[int(parts[0])] = parts[1]
+            except Exception as ex:
+                print(f"load_spn_descriptions, line: {line}, error: {ex}")
+                sys.exit()
+
+# Function to load FMI descriptions from file
+def load_fmi_descriptions(file_path):
+    global fmi_descriptions
+    with open(file_path, 'r') as file:
+        for line in file:
+            try:
+                parts = line.strip().split(';')
+                fmi_descriptions[int(parts[0])] = parts[1]
+            except Exception as ex:
+                print(f"load_fmi_descriptions, line: {line}, error: {ex}")
+                sys.exit()
 
 # Function to parse BAM TP:CT message
 def parse_tp_ct_message(line):
@@ -366,11 +396,17 @@ def update_active_faults_display():
 
     for fault in active_faults:
         key = (fault['src'], fault['spn'], fault['fmi'])
-        src_description = source_descriptions.get(int(fault['src'], 16), "")
+        try:
+            src_description = source_descriptions.get(int(fault['src'], 16), "")
+            spn_description = spn_descriptions.get(fault['spn'], "")
+            fmi_description = fmi_descriptions.get(fault['fmi'], "")
+        except Exception as ex:
+            print(f"update_active_faults_display, src: {fault['src']}, spn: {fault['spn']}, fmi: {fault['fmi']}, error: {ex}")
+            sys.exit()
         values = (
             f"0x{fault['src']} ({int(fault['src'], 16)}) - {src_description}", 
-            f"0x{format(fault['spn'], 'X')} ({fault['spn']})", 
-            fault['fmi'],
+            f"0x{format(fault['spn'], 'X')} ({fault['spn']}) - {spn_description}", 
+            f"{fault['fmi']} - {fmi_description}",
             fault['cm'], 
             fault['oc'], 
             fault['mil'], 
@@ -396,10 +432,13 @@ def update_active_faults_display():
             tree.item(treeview_items[key], values=(*values[:-1], 'inactive'))
             tree.item(treeview_items[key], tags=('inactive',))
 
-# Load source descriptions at the start
-load_source_descriptions('sources.txt')
 
 if EMULATE_TIME and DISPLAY_SCREEN:
+    # Load descriptions
+    load_source_descriptions('database/sources.txt')
+    load_spn_descriptions('database/spn.txt')
+    load_fmi_descriptions('database/fmi.txt')
+
     root = tk.Tk()
     root.title("Active Faults")
     root.geometry("900x400")

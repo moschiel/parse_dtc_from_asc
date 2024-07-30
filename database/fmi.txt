@@ -1,0 +1,32 @@
+0;Data valid but above normal operating range - Most Severe
+1;Data valid but below normal operating range - Most Severe
+2;Data erratic, intermittent or incorrect
+3;Voltage above normal, or shorted to high source
+4;Voltage below normal, or shorted to low source
+5;Current below normal, or open circuit
+6;Current above normal, or grounded circuit
+7;Mechanical System not responding, or out of adjustment
+8;Abnormal Frequency, or Pulse Width, or Period
+9;Abnormal update rate
+10;Abnormal rate of change
+11;Root cause not known
+12;Bad intelligent devise or component
+13;Out of calibration
+14;Special instructions
+15;Data valid but above normal operating range - Least Severe
+16;Data valid but above normal operating range - Moderately Severe
+17;Data valid but below normal operating range - Least Severe
+18;Data valid but below normal operating range - Moderately Severe
+19;Received network data in error
+20;Data drifted high
+21;Data drifted low
+22;Reserved - See Description
+23;Reserved - See Description
+24;Reserved - See Description
+25;Reserved - See Description
+26;Reserved - See Description
+27;Reserved - See Description
+28;Reserved - See Description
+29;Reserved - See Description
+30;Reserved - See Description
+31;Condition exists
