@@ -10,7 +10,7 @@
 
 ## Overview
 
-This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANalyzer ASC logging file, specifically focusing on messages with PGN 0xFECA (DM1). It can handle both single-frame and multi-frame (BAM) messages and maintains a list of active faults, setting them as inactive if they are not seen for a specified period (debounce inactive). The GUI provides a real-time display of active faults, their status, and an adjustable timeout setting.
+This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANalyzer ASC logging file, specifically focusing on messages with PGN 0xFECA (DM1). It can handle both single-frame and multi-frame (BAM) messages. The GUI provides a real-time display of active faults, their status, and an adjustable debounce setting.
 
 ## Features
 
