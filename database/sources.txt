@@ -1,34 +1,101 @@
-0;Primary Engine Controller (CPC, ECM)
-1;Secondary Engine Controller (MCM, ECM #2)
-3;Primary Transmission Controller (TCM)
-11;Brakes - System Controller (ABS)
-17;Cruise Control (IPM, PCC)
-18;Fuel System (CNG Controller)
-19;Steering Controller (SAS)
-23;Instrument Cluster (ICU, RX)
-25;Climate Control #1 (FCU)
-33;Body Controller (SSAM, SAM-CAB, BHM)
-37;Off Vehicle Gateway (CGW)
-42;Headway Controller (RDF, OnGuard)
-47;Suspension - System Controller (ECAS)
-49;Cab Controller - Primary (MSF, SHM, ECC)
-51;Tire Pressure Controller (TPMS)
-58;Climate Control #2 (ParkSmart)
-61;Exhaust Emission Controller (ACM)
-69;Auxiliary Heater (ACU)
-71;Chassis Controller (CHM, SAM-Chassis)
-74;Communications Unit, Cellular (CTP, VT)
-83;Safety Restraint System (Air Bag)
-127;Multi-Purpose Camera (MPC)
-128;Switch Expansion Module (SEM #1)
-139;J1939 - 139
-160;J1939 - 160 (OnGuard Display)
-184;Trailer #3 Bridge
-192;Trailer #2 Bridge
-200;Trailer #1 Bridge
-209;J1939 - 209 (Bendix Camera)
-232;Forward Road Image Processor (VRDU)
-236;Door Controller #1 (DCMD)
-237;Door Controller #2 (DCMP)
-238;Tachograph (TCO)
-247;Auxiliary Power Unit (APU)
+0;Engine #1
+1;Engine #2
+2;Turbocharger
+3;Transmission #1
+4;Transmission #2
+5;Shift Console - Primary
+6;Shift Console - Secondary
+7;Power TakeOff - (Main or Rear)
+8;Axle - Steering
+9;Axle - Drive #1
+10;Axle - Drive #2
+11;Brakes - System Controller
+12;Brakes - Steer Axle
+13;Brakes - Drive axle #1
+14;Brakes - Drive Axle #2
+15;Retarder - Engine
+16;Retarder - Driveline
+17;Cruise Control
+18;Fuel System
+19;Steering Controller
+20;Suspension - Steer Axle
+21;Suspension - Drive Axle #1
+22;Suspension - Drive Axle #2
+23;Instrument Cluster #1
+24;Trip Recorder
+25;Passenger-Operator Climate Control #1
+26;Alternator/Electrical Charging System
+27;Aerodynamic Control
+28;Vehicle Navigation
+29;Vehicle Security
+30;Electrical System
+31;Starter System
+32;Tractor-Trailer Bridge #1
+33;Body Controller
+34;Auxiliary Valve Control or Engine Air System Valve Control
+35;Hitch Control
+36;Power TakeOff (Front or Secondary)
+37;Off Vehicle Gateway
+38;Virtual Terminal (in cab)
+39;Management Computer #1
+40;Cab Display #1
+41;Retarder, Exhaust, Engine #1
+42;Headway Controller
+43;On-Board Diagnostic Unit
+44;Retarder, Exhaust, Engine #2
+45;Endurance Braking System
+46;Hydraulic Pump Controller
+47;Suspension - System Controller #1
+48;Pneumatic - System Controller
+49;Cab Controller - Primary
+50;Cab Controller - Secondary
+51;Tire Pressure Controller
+52;Ignition Control Module #1
+53;Ignition Control Module #2
+54;Seat Control #1
+55;Lighting - Operator Controls
+56;Rear Axle Steering Controller #1
+57;Water Pump Controller
+58;Passenger-Operator Climate Control #2
+59;Transmission Display - Primary
+60;Transmission Display - Secondary
+61;Exhaust Emission Controller
+62;Vehicle Dynamic Stability Controller
+63;Oil Sensor
+64;Suspension - System Controller #2
+65;Information System Controller #1
+66;Ramp Control
+67;Clutch/Converter Unit
+68;Auxiliary Heater #1
+69;Auxiliary Heater #2
+70;Engine Valve Controller
+71;Chassis Controller #1
+72;Chassis Controller #2
+73;Propulsion Battery Charger
+74;Communications Unit, Cellular
+75;Communications Unit, Satellite
+76;Communications Unit, Radio
+77;Steering Column Unit
+78;Fan Drive Controller
+79;Seat Control #2
+80;Parking brake controller
+81;Aftertreatment #1 system gas intake
+82;Aftertreatment #1 system gas outlet
+83;Safety Restraint System
+84;Cab Display #2
+85;Diesel Particulate Filter Controller
+86;Aftertreatment #2 system gas intake
+87;Aftertreatment #2 system gas outlet
+88;Safety Restraint System #2
+89;Atmospheric Sensor
+90;Powertrain Control Module
+91;Power Systems Manager
+92;thru 127 are reserved for future assignment by SAE
+248;File Server / Printer
+249;Off Board Diagnostic-Service Tool #1
+250;Off Board Diagnostic-Service Tool #2
+251;On-Board Data Logger
+252;Reserved for Experimental Use
+253;Reserved for OEM
+254;Null Address
+255;GLOBAL (All-Any Node)
