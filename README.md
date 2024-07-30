@@ -3,7 +3,9 @@
 
 **Description**: Parse J1939 Diagnostics Trouble Code (DTC) from CANalyzer ASC logging file.
 
-![image](https://github.com/user-attachments/assets/0cf920b0-2f3a-4ac5-8aae-b8e9b04ca8ec)
+<!-- ![image](https://github.com/user-attachments/assets/0cf920b0-2f3a-4ac5-8aae-b8e9b04ca8ec) -->
+![image](https://github.com/user-attachments/assets/b5418880-89e9-47e7-ab4d-7c8e174c6121)
+
 
 
 ## Overview
