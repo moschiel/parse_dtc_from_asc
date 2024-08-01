@@ -18,14 +18,15 @@ This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANaly
 - Parse multi-frame DM1 messages using BAM (Broadcast Announce Message).
 - Maintain a list of active faults, adding new faults and marking those that are inactive for a specified period (debounce inactive).
 - Emulate real-time processing based on timestamps in the log file.
+- Display complete timeline of active/inactive status transitions
 - GUI display of active faults (green) , inactive faults (gray), and candidate faults (white), with dynamic updates.
 - GUI adjustable debounce time setting for a fault to become 'active' or 'inactive' .
 
 ## Usage
 
 1. Set the `file_path` variable to the path of your ASC log file.
-2. Adjust the print control variables as needed:
-   - `PRINT_DM1_SINGLE_FRAME`: Print single-frame DM1 messages.
+2. Adjust the print control variables as needed to debug in Terminal:
+   - `PRINT_DM1_SINGLE_FRAME`: Print on single-frame DM1 messages.
    - `PRINT_TP_CT`: Print TP.CT messages.
    - `PRINT_TP_DT`: Print TP.DT messages.
    - `PRINT_J1939TP_FECAp`: Print concatenated J1939TP FECA messages.
@@ -42,19 +43,22 @@ This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANaly
 
 The GUI displays the following columns for each active fault:
 
+- `Last Seen`: Timestamp of the last occurrence
+- `Status`: Fault status (acive, inactive or candidate)
 - `SRC`: Source Address
 - `SPN`: Suspect Parameter Number
 - `FMI`: Failure Mode Identifier
-- 'CM': SPN Conversion Method
+- `CM`: SPN Conversion Method
 - `OC`: Occurrence Count
 - `MIL`: Malfunction Indicator Lamp status
 - `RSL`: Red Stop Lamp status
 - `AWL`: Amber Warning Lamp status
 - `PL`: Protect Lamp status
-- `Last Seen`: Timestamp of the last occurrence
 
 ### GUI Elements
 
+- **Start Time Emulation**: Emulate real-time execution.
+- **Show Complete Timeline**: Show a complete timeline of every status transitions (active/inactive).
 - **Timestamp Display**: Shows the current emulated time in seconds.
 - **Debounce Inactive Fault**: An entry field to adjust the debounce duration for a fault to change from 'active' to 'inactive'.
 - **Debounce Active Fault**: An entry field to adjust the debounce active window for a fault to change from 'candidate' to 'active'.

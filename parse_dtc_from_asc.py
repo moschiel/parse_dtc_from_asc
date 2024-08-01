@@ -21,24 +21,32 @@ PRINT_NEW_ACTIVE_DTCs = False
 PRINT_REMOVED_ACTIVE_DTCs = False
 PRINT_REMOVED_CANDIDATE_DTCs = False
 
-# Control variables for emulating time and display
-EMULATE_TIME = True
-DISPLAY_SCREEN = True
-last_time = 0.0 
 
 # List to store active faults
 candidate_faults = []
 active_faults = []
-# Remove faults that have not been updated by this amount of time
-debounce_fault_inactive = 20
+timeline_faults = []
+
+debounce_fault_inactive = 20 # Remove faults that have not been updated by this amount of time (seconds)
 debounce_fault_active_count = 10  # Number of occurrences to consider fault active
 debounce_fault_active_time = 10  # Time window in seconds to consider fault active
 
-# Variable to store the last displayed timestamp
+# Control variables for emulating time
+last_time = 0.0 
 last_displayed_timestamp = 0.0
+end_time = 0
 
-# Flag to stop the thread
-stop_thread = False
+# GUI reference
+root = None
+tree = None
+timestamp_label = None
+progress_var = None
+
+# Flags
+stop_thread = True
+finished_thread = False
+close_app = False
+app_mode = None
 
 # Dictionary to store descriptions
 source_descriptions = {}
@@ -133,21 +141,45 @@ def bytes_to_binary_string(byte_list):
     return binary_string
 
 def print_active_faults():
-    if PRINT_ACTIVE_DTCs == False or EMULATE_TIME == False:
+    if PRINT_ACTIVE_DTCs == False or app_mode != 'EMULATE_TIME':
         return
     print(f'Active Faults:')
     global active_faults
     for fault in active_faults: 
         print(f"        SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}, MIL: {fault['mil']}, RSL: {fault['rsl']}, AWL: {fault['awl']}, PL: {fault['pl']}")
 
-# Function to update the active faults list
-def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float_timestamp):
-    if EMULATE_TIME == False:
+def fault_to_tupple(fault):
+    try:
+        src_description = source_descriptions.get(int(fault['src'], 16), "")
+        spn_description = spn_descriptions.get(fault['spn'], "")
+        fmi_description = fmi_descriptions.get(fault['fmi'], "")
+    except Exception as ex:
+        print(f"fault_to_tupple, src: {fault['src']}, spn: {fault['spn']}, fmi: {fault['fmi']}, error: {ex}")
+        sys.exit()
         return
 
-    # Update if exist on list already
+    return (
+            fault['last_seen'],
+            fault['status'],
+            f"0x{fault['src']} ({int(fault['src'], 16)}) - {src_description}", 
+            f"0x{format(fault['spn'], 'X')} ({fault['spn']}) - {spn_description}", 
+            f"{fault['fmi']} - {fmi_description}",
+            fault['cm'], 
+            fault['oc'], 
+            fault['mil'], 
+            fault['rsl'], 
+            fault['awl'], 
+            fault['pl']
+        )
+
+
+# Function to update the active faults list
+def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float_timestamp):
     global active_faults
+    global tree
+
     updatedExistingFault = False
+    # Update if exist on list already
     for fault in active_faults:
         if fault['src'] == src and fault['spn'] == spn and fault['fmi'] == fmi:
             fault['cm'] = cm
@@ -185,9 +217,12 @@ def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float_timesta
             if((float_timestamp - fault['first_seen']) <= debounce_fault_active_time): # if debounce active timeout
                 if(fault['occurrences'] >= debounce_fault_active_count): #if has the minimum amount of occurrences
                     fault['status'] = 'active' # set as active
-
-        if PRINT_NEW_ACTIVE_DTCs:
-            print(f'{float_timestamp} new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
+                    if app_mode == 'SHOW_TIMELINE':
+                        values = fault_to_tupple(fault)
+                        tag = 'active'
+                        tree.insert('', 'end', values=values, tags=(tag,))
+                    if PRINT_NEW_ACTIVE_DTCs:
+                        print(f'{float_timestamp} new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
 
     added_new_faults = not updatedExistingFault
     return added_new_faults
@@ -195,8 +230,8 @@ def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float_timesta
 # Remove faults that have not been updated for a certain time
 # or if they are not 'candidate' anymore
 def remove_inactive_faults(float_timestamp):
-    if EMULATE_TIME == False:
-        return
+    # if app_mode != 'EMULATE_TIME':
+        # return
 
     global active_faults
     global debounce_fault_inactive
@@ -215,6 +250,12 @@ def remove_inactive_faults(float_timestamp):
             if current_time - fault['last_seen'] <= debounce_fault_inactive:
                 new_active_faults.append(fault)
             else:
+                if app_mode == 'SHOW_TIMELINE':
+                    aux_fault = fault
+                    aux_fault['status'] = 'inactive'
+                    values = fault_to_tupple(aux_fault)
+                    tag = 'inactive'
+                    tree.insert('', 'end', values=values, tags=(tag,))
                 if PRINT_REMOVED_ACTIVE_DTCs: 
                     print(f"{float_timestamp} removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
                 removed = True
@@ -255,7 +296,7 @@ def parse_dm1_message(timestamp, src, data_bytes):
 
 # Sleep to emulate log execution time
 def emulate_waiting_time(float_timestamp):
-    if EMULATE_TIME:
+    if app_mode == 'EMULATE_TIME':
         global last_time
         if last_time != 0:
             time_diff = float_timestamp - last_time
@@ -263,12 +304,34 @@ def emulate_waiting_time(float_timestamp):
                 time.sleep(time_diff)
         last_time = float_timestamp
 
+def clear_control_variables():
+    global last_time
+    global last_displayed_timestamp
+    global tree
+    global treeview_items
+    global timestamp_label
+    global progress_var
+    global root
+    
+    last_time = 0
+    last_displayed_timestamp = 0
+    treeview_items = {}
+    timestamp_label.config(text="Time: 0s")
+    progress_var.set(0)
+    for item in tree.get_children(): #delete all rows from GUI
+        tree.delete(item)
+    root.update_idletasks()
+
 def update_screen_time(float_timestamp):
-    if EMULATE_TIME == False or DISPLAY_SCREEN == False:
+    if app_mode != 'EMULATE_TIME':
         return
     global last_displayed_timestamp
     if float_timestamp - last_displayed_timestamp >= 1:
         last_displayed_timestamp = float_timestamp
+        global timestamp_label
+        global end_time
+        global progress_var
+        global root
         timestamp_label.config(text=f"Time: {int(float_timestamp)}s")
         percent = (float_timestamp / end_time) * 100
         progress_var.set(percent)
@@ -290,6 +353,8 @@ def get_end_time(file_path):
 
 # Main function to read log file and print DTCs from individual frames or from BAM frames
 def read_log_and_print_dtc(file_path):
+    #Reset all variables
+    clear_control_variables()
     current_bams = []  # List to store current BAM messages
     started_measurement = False
 
@@ -306,7 +371,13 @@ def read_log_and_print_dtc(file_path):
 
             parts = line.split()
             timestamp = parts[0]
-            float_timestamp = float(timestamp)
+            
+            try:
+                float_timestamp = float(timestamp)
+            except Exception as ex:
+                print(f"Error reading timestamp: {ex}")
+                continue
+
             emulate_waiting_time(float_timestamp)
             update_screen_time(float_timestamp)
             
@@ -387,38 +458,19 @@ def read_log_and_print_dtc(file_path):
 # Dictionary to store references to treeview items
 treeview_items = {}
 def update_active_faults_display():
-    if EMULATE_TIME == False or DISPLAY_SCREEN == False:
+    if app_mode != 'EMULATE_TIME':
         return
 
     global treeview_items
+    global tree
 
     current_fault_keys = {(fault['src'], fault['spn'], fault['fmi']) for fault in active_faults}
 
     for fault in active_faults:
         key = (fault['src'], fault['spn'], fault['fmi'])
-        try:
-            src_description = source_descriptions.get(int(fault['src'], 16), "")
-            spn_description = spn_descriptions.get(fault['spn'], "")
-            fmi_description = fmi_descriptions.get(fault['fmi'], "")
-        except Exception as ex:
-            print(f"update_active_faults_display, src: {fault['src']}, spn: {fault['spn']}, fmi: {fault['fmi']}, error: {ex}")
-            sys.exit()
-        values = (
-            f"0x{fault['src']} ({int(fault['src'], 16)}) - {src_description}", 
-            f"0x{format(fault['spn'], 'X')} ({fault['spn']}) - {spn_description}", 
-            f"{fault['fmi']} - {fmi_description}",
-            fault['cm'], 
-            fault['oc'], 
-            fault['mil'], 
-            fault['rsl'], 
-            fault['awl'], 
-            fault['pl'], 
-            fault['last_seen'],
-            fault['status']
-        )
-
+        values = fault_to_tupple(fault)
         tag = fault['status']
-
+        
         if key in treeview_items:
             tree.item(treeview_items[key], values=values)
             tree.item(treeview_items[key], tags=(tag,))
@@ -429,21 +481,26 @@ def update_active_faults_display():
     for key in list(treeview_items.keys()):
         if key not in current_fault_keys:
             values = tree.item(treeview_items[key], 'values')
-            tree.item(treeview_items[key], values=(*values[:-1], 'inactive'))
+            # Atualizar a segunda coluna (índice 1 / status) para um novo valor 'inactive'
+            new_values = (values[0], 'inactive', *values[2:])
+            tree.item(treeview_items[key], values=new_values)
             tree.item(treeview_items[key], tags=('inactive',))
 
 
-if EMULATE_TIME and DISPLAY_SCREEN:
+def init_app():
     # Load descriptions
     load_source_descriptions('database/sources.txt')
     load_spn_descriptions('database/spn.txt')
     load_fmi_descriptions('database/fmi.txt')
 
+    global root
     root = tk.Tk()
     root.title("Active Faults")
-    root.geometry("900x400")
+    root.geometry("900x500")
 
-    columns = ('SRC', 'SPN', 'FMI', 'CM', 'OC', 'MIL', 'RSL', 'AWL', 'PL', 'Last Seen', 'Status')
+    columns = ('Last Seen', 'Status', 'SRC', 'SPN', 'FMI', 'CM', 'OC', 'MIL', 'RSL', 'AWL', 'PL')
+    
+    global tree
     tree = ttk.Treeview(root, columns=columns, show='headings')
     for col in columns:
         tree.heading(col, text=col)
@@ -454,24 +511,101 @@ if EMULATE_TIME and DISPLAY_SCREEN:
     tree.tag_configure('inactive', background='lightgrey')
     tree.tag_configure('candidate', background='white')
 
-    timestamp_label = tk.Label(root, text="Time: 0s")
-    timestamp_label.pack()
+    def read_log_thread(file_path):
+        global stop_thread
+        global finished_thread
+        global close_app
+        while True:
+            if not stop_thread and not finished_thread:
+                read_log_and_print_dtc(file_path)
+                finished_thread = True
+            elif close_app:
+                return
 
-    debounce_inactive_label = tk.Label(root, text="Debounce Fault Inactive (seconds):")
+
+    read_log_thread = threading.Thread(target=read_log_thread, args=(file_path,))
+
+    def on_start_emulation():
+        global stop_thread
+        global app_mode
+        global finished_thread
+        if not stop_thread:
+            return
+        if app_mode == 'EMULATE_TIME':
+            return
+        app_mode = 'EMULATE_TIME'
+        stop_thread = False
+        finished_thread = False
+        try:
+            read_log_thread.start()
+        except Exception as ex:
+            print(f"fail to start read_log_thread: {ex}")
+
+    def on_show_timeline():
+        global stop_thread
+        global app_mode
+        global finished_thread
+        if not stop_thread:
+            return
+        if app_mode == 'SHOW_TIMELINE':
+            return
+        app_mode = 'SHOW_TIMELINE'
+        stop_thread = False
+        finished_thread = False
+        try:
+            read_log_thread.start()
+        except Exception as ex:
+            print(f"fail to start read_log_thread: {ex}")
+
+    def on_stop():
+        global stop_thread
+        global app_mode
+        stop_thread = True
+        finished_thread = False
+        app_mode = None
+
+    # Frame to hold the buttons horizontally
+    button_frame = tk.Frame(root)
+    button_frame.pack(pady=20)
+
+    start_time_emulation_button = tk.Button(button_frame, text="Start Time Emulation", command=on_start_emulation,)
+    start_time_emulation_button.pack(side=tk.LEFT, padx=5)
+
+    display_history_timeline_button = tk.Button(button_frame, text="Show Complete Timeline", command=on_show_timeline)
+    display_history_timeline_button.pack(side=tk.LEFT, padx=5)
+
+    stop_button = tk.Button(button_frame, text="Stop", command=on_stop)
+    stop_button.pack(side=tk.LEFT, padx=5)
+
+    # global timestamp_label
+    # timestamp_label = tk.Label(root, text="Time: 0s")
+    # timestamp_label.pack()
+
+    # Frame to hold the inputs horizontally
+    input_frame = tk.Frame(root)
+    input_frame.pack(pady=20)
+
+    inactive_frame = tk.Frame(input_frame)
+    inactive_frame.pack(side=tk.LEFT, padx=5)
+    debounce_inactive_label = tk.Label(inactive_frame, text="Debounce Fault Inactive (seconds):")
     debounce_inactive_label.pack()
-    debounce_inactive_entry = tk.Entry(root)
+    debounce_inactive_entry = tk.Entry(inactive_frame)
     debounce_inactive_entry.pack()
     debounce_inactive_entry.insert(0, str(debounce_fault_inactive))
 
-    debounce_active_count_label = tk.Label(root, text="Debounce Fault Active Count:")
+    count_active_frame = tk.Frame(input_frame)
+    count_active_frame.pack(side=tk.LEFT, padx=5)
+    debounce_active_count_label = tk.Label(count_active_frame, text="Debounce Fault Active Count:")
     debounce_active_count_label.pack()
-    debounce_active_count_entry = tk.Entry(root)
+    debounce_active_count_entry = tk.Entry(count_active_frame)
     debounce_active_count_entry.pack()
     debounce_active_count_entry.insert(0, str(debounce_fault_active_count))
 
-    debounce_active_time_label = tk.Label(root, text="Debounce Fault Active Time (seconds):")
+    debounce_active_frame = tk.Frame(input_frame)
+    debounce_active_frame.pack(side=tk.LEFT, padx=5)
+    debounce_active_time_label = tk.Label(debounce_active_frame, text="Debounce Fault Active Time (seconds):")
     debounce_active_time_label.pack()
-    debounce_active_time_entry = tk.Entry(root)
+    debounce_active_time_entry = tk.Entry(debounce_active_frame)
     debounce_active_time_entry.pack()
     debounce_active_time_entry.insert(0, str(debounce_fault_active_time))
 
@@ -484,27 +618,32 @@ if EMULATE_TIME and DISPLAY_SCREEN:
         except ValueError:
             pass
 
-    configs_button = tk.Button(root, text="Update Configs", command=update_configs)
-    configs_button.pack()
+    configs_button = tk.Button(input_frame, text="Update Configs", command=update_configs)
+    configs_button.pack(side=tk.LEFT, padx=5)
 
+    # frame to hold timestamp and progressbar
+    progress_frame = tk.Frame(root)
+    progress_frame.pack(pady=20, fill=tk.X, expand=True)
+    global timestamp_label
+    timestamp_label = tk.Label(progress_frame, text="Time: 0s")
+    timestamp_label.pack(side=tk.LEFT, padx=5)
+    global progress_var
     progress_var = tk.DoubleVar()
-    progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
-    progress_bar.pack(fill=tk.X, expand=True)
+    progress_bar = ttk.Progressbar(progress_frame, variable=progress_var, maximum=100)
+    progress_bar.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
 
+    global end_time
     end_time = get_end_time(file_path)
-
-    def read_log_thread(file_path):
-        read_log_and_print_dtc(file_path)
-        root.quit()
-
-    threading.Thread(target=read_log_thread, args=(file_path,)).start()
 
     def on_closing():
         global stop_thread
         stop_thread = True
+        global close_app
+        close_app = True
         root.quit()
+
 
     root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
-else:
-    read_log_and_print_dtc(file_path)
+
+init_app()
