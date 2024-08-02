@@ -5,8 +5,8 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-# file_path = 'example_files/VWConstel2024_1.asc'
-file_path = 'example_files/VWConstel2024_2.asc'
+file_path = 'example_files/VWConstel2024_1.asc'
+# file_path = 'example_files/VWConstel2024_2.asc'
 
 # Print control variables
 PRINT_DM1_SINGLE_FRAME = False
@@ -17,8 +17,8 @@ PRINT_TP_DM1_MULTI_FRAME = False
 PRINT_INCORRET_ORDER = False
 PRINT_DM1_PARSED = False
 PRINT_ACTIVE_DTCs = False
-PRINT_NEW_ACTIVE_DTCs = False
-PRINT_REMOVED_ACTIVE_DTCs = False
+PRINT_NEW_ACTIVE_DTCs = True
+PRINT_REMOVED_ACTIVE_DTCs = True
 PRINT_REMOVED_CANDIDATE_DTCs = False
 
 
@@ -27,7 +27,7 @@ candidate_faults = []
 active_faults = []
 timeline_faults = []
 
-debounce_fault_inactive = 20 # Remove faults that have not been updated by this amount of time (seconds)
+debounce_fault_inactive = 10 # Remove faults that have not been updated by this amount of time (seconds)
 debounce_fault_active_count = 10  # Number of occurrences to consider fault active
 debounce_fault_active_time = 10  # Time window in seconds to consider fault active
 
@@ -174,7 +174,7 @@ def fault_to_tupple(fault):
 
 
 # Function to update the active faults list
-def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float_timestamp):
+def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, timestamp):
     global active_faults
     global tree
 
@@ -188,7 +188,7 @@ def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float_timesta
             fault['rsl'] = rsl
             fault['awl'] = awl
             fault['pl'] = pl
-            fault['last_seen'] = float_timestamp
+            fault['last_seen'] = timestamp
             if(fault['status'] == 'candidate'):
                 fault['occurrences'] += 1
             updatedExistingFault = True
@@ -205,16 +205,16 @@ def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float_timesta
             'rsl': rsl,
             'awl': awl,
             'pl': pl,
-            'last_seen': float_timestamp,
-            'first_seen': float_timestamp,
+            'last_seen': timestamp,
+            'first_seen': timestamp,
             'occurrences': 1,
             'status': 'candidate'
         })
     
-    # Verify if 'candidate' fault is elegible to become 'active'
+    # Promote candidate faults to active if they meet the criteria
     for fault in active_faults:
         if(fault['status'] == 'candidate'): # is candidate
-            if((float_timestamp - fault['first_seen']) <= debounce_fault_active_time): # if debounce active timeout
+            if((timestamp - fault['first_seen']) <= debounce_fault_active_time): # if debounce active timeout
                 if(fault['occurrences'] >= debounce_fault_active_count): #if has the minimum amount of occurrences
                     fault['status'] = 'active' # set as active
                     if app_mode == 'SHOW_TIMELINE':
@@ -222,29 +222,29 @@ def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float_timesta
                         tag = 'active'
                         tree.insert('', 'end', values=values, tags=(tag,))
                     if PRINT_NEW_ACTIVE_DTCs:
-                        print(f'{float_timestamp} new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
+                        print(f'[{timestamp}] new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
 
     added_new_faults = not updatedExistingFault
     return added_new_faults
 
 # Remove faults that have not been updated for a certain time
 # or if they are not 'candidate' anymore
-def remove_inactive_faults(float_timestamp):
+def remove_inactive_faults(timestamp):
     # if app_mode != 'EMULATE_TIME':
         # return
 
     global active_faults
     global debounce_fault_inactive
-    current_time = float_timestamp
+    current_time = timestamp
     new_active_faults = []
     removed = False
     for fault in active_faults:
         if(fault['status'] == 'candidate'): # candidate fault, do not keep on list if it is not a candidate anymore
-            if((float_timestamp - fault['first_seen']) <= debounce_fault_active_time):
+            if((timestamp - fault['first_seen']) <= debounce_fault_active_time):
                 new_active_faults.append(fault)
             else:
                 if PRINT_REMOVED_CANDIDATE_DTCs: 
-                    print(f"{float_timestamp} removed CANDIDATE fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
+                    print(f"[{timestamp}] removed CANDIDATE fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
                 removed = True
         else: # active fault, do not keep on list if it is not active anymore
             if current_time - fault['last_seen'] <= debounce_fault_inactive:
@@ -252,12 +252,13 @@ def remove_inactive_faults(float_timestamp):
             else:
                 if app_mode == 'SHOW_TIMELINE':
                     aux_fault = fault
+                    aux_fault['last_seen'] = timestamp
                     aux_fault['status'] = 'inactive'
                     values = fault_to_tupple(aux_fault)
                     tag = 'inactive'
                     tree.insert('', 'end', values=values, tags=(tag,))
                 if PRINT_REMOVED_ACTIVE_DTCs: 
-                    print(f"{float_timestamp} removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
+                    print(f"[{timestamp}] removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
                 removed = True
     
     active_faults = new_active_faults
@@ -273,7 +274,7 @@ def parse_dm1_message(timestamp, src, data_bytes):
     pl = data_bytes[0] & 0x03          # byte1, 2bits, Protect Lamp status
     rfu = data_bytes[1]                # byte2, reserved
     if PRINT_DM1_PARSED:
-        print(f"DM1 -> Time: {timestamp}, SRC: 0x{src} ({int(src, 16)}), MIL: {mil}, RSL: {rsl}, AWL: {awl}, PL: {pl}")
+        print(f"[{timestamp}] DM1_PARSED -> SRC: 0x{src} ({int(src, 16)}), MIL: {mil}, RSL: {rsl}, AWL: {awl}, PL: {pl}")
     
     added_new_faults = False
     # Starting at third byte, iterate 4 bytes each cycle
@@ -286,7 +287,7 @@ def parse_dm1_message(timestamp, src, data_bytes):
         if PRINT_DM1_PARSED:
             print(f"        DTC[{j}] -> SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}, CM: {cm}, OC: {oc}")
         
-        if update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, float(timestamp)):
+        if update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, int(float(timestamp))):
             added_new_faults = True
         j += 1
 
@@ -295,14 +296,14 @@ def parse_dm1_message(timestamp, src, data_bytes):
         print_active_faults()
 
 # Sleep to emulate log execution time
-def emulate_waiting_time(float_timestamp):
+def emulate_waiting_time(timestamp):
     if app_mode == 'EMULATE_TIME':
         global last_time
         if last_time != 0:
-            time_diff = float_timestamp - last_time
+            time_diff = timestamp - last_time
             if time_diff > 0:
                 time.sleep(time_diff)
-        last_time = float_timestamp
+        last_time = timestamp
 
 def clear_control_variables():
     global last_time
@@ -322,18 +323,18 @@ def clear_control_variables():
         tree.delete(item)
     root.update_idletasks()
 
-def update_screen_time(float_timestamp):
+def update_screen_time(timestamp):
     if app_mode != 'EMULATE_TIME':
         return
     global last_displayed_timestamp
-    if float_timestamp - last_displayed_timestamp >= 1:
-        last_displayed_timestamp = float_timestamp
+    if timestamp - last_displayed_timestamp >= 1:
+        last_displayed_timestamp = timestamp
         global timestamp_label
         global end_time
         global progress_var
         global root
-        timestamp_label.config(text=f"Time: {int(float_timestamp)}s")
-        percent = (float_timestamp / end_time) * 100
+        timestamp_label.config(text=f"Time: {timestamp}s")
+        percent = (timestamp / end_time) * 100
         progress_var.set(percent)
         root.update_idletasks()
         if(percent >= 100):
@@ -374,12 +375,13 @@ def read_log_and_print_dtc(file_path):
             
             try:
                 float_timestamp = float(timestamp)
+                int_timestamp = int(float_timestamp)
             except Exception as ex:
                 print(f"Error reading timestamp: {ex}")
                 continue
 
-            emulate_waiting_time(float_timestamp)
-            update_screen_time(float_timestamp)
+            emulate_waiting_time(int_timestamp)
+            update_screen_time(int_timestamp)
             
             if 'Rx' in line:
                 if 'J1939TP FECAp' in line:  
@@ -423,19 +425,19 @@ def read_log_and_print_dtc(file_path):
                             'packets': []
                         })
                         if PRINT_TP_CM:
-                            print(f"TP.CM -> Time: {timestamp}, ID: {message_id}, Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
+                            print(f"[{timestamp}] TP.CM -> ID: {message_id}, Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
                 elif is_tp_dt_message_id(message_id):  # Identify TP.DT message
                     result = parse_tp_dt_message(line)
                     if result:
                         timestamp, message_id, packet_number, data = result
-                        if PRINT_TP_DT:
-                            print(f"TP.DT ->  Time: {timestamp}, ID: {message_id}, Packet Number: {packet_number}, Data: {' '.join(data)}")
                         
                         for bam in current_bams:
                             if bam['message_id_tp_dt'] == message_id:
+                                if PRINT_TP_DT:
+                                    print(f"[{timestamp}] TP.DT -> ID: {message_id}, Packet Number: {packet_number} of {bam['num_packets']}, Data: {' '.join(data)}")
                                 if packet_number != (len(bam['packets']) + 1):
                                     if PRINT_INCORRET_ORDER:
-                                        print('Packet Order is Incorrect')
+                                        print(f'[{timestamp}] Packet Order is Incorrect, ID: {(message_id.replace('x','',1))}, Received: {packet_number}, Expected: {(len(bam['packets']) + 1)}')
                                     current_bams.remove(bam)
                                     break
 
@@ -448,7 +450,7 @@ def read_log_and_print_dtc(file_path):
                                     combined_data = combined_data[:bam['total_size']]
 
                                     if PRINT_TP_DM1_MULTI_FRAME:
-                                        print(f"TP -> Time: {bam['timestamp']}, ID: {bam['message_id']}, Size: {bam['total_size']}, Data: {' '.join(combined_data)}")
+                                        print(f"[{timestamp}] TP CONCAT -> ID: {(bam['message_id'].replace('x','',1))}, Size: {bam['total_size']}, Data: {' '.join(combined_data)}")
                                     
                                     data_bytes = [int(b, 16) for b in combined_data]
                                     parse_dm1_message(timestamp, src, data_bytes)
@@ -456,7 +458,7 @@ def read_log_and_print_dtc(file_path):
                                     current_bams.remove(bam)
                                     break
 
-                remove_inactive_faults(float_timestamp)
+                remove_inactive_faults(int_timestamp)
 
 # Dictionary to store references to treeview items
 treeview_items = {}
@@ -615,9 +617,9 @@ def init_app():
     def update_configs():
         global debounce_fault_inactive, debounce_fault_active_count, debounce_fault_active_time
         try:
-            debounce_fault_inactive = float(debounce_inactive_entry.get())
+            debounce_fault_inactive = int(debounce_inactive_entry.get())
             debounce_fault_active_count = int(debounce_active_count_entry.get())
-            debounce_fault_active_time = float(debounce_active_time_entry.get())
+            debounce_fault_active_time = int(debounce_active_time_entry.get())
         except ValueError:
             pass
 
