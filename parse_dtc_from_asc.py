@@ -404,6 +404,7 @@ def read_log_and_print_dtc(file_path):
                         if pgn != 65226:  # If it is not DM1 (0xFECA), ignore it
                             continue
 
+                        # TP.CT version of the TP.CM message
                         message_id_tp_ct = message_id.replace('EC', 'EB', 1)
 
                         for bam in current_bams:
