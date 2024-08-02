@@ -5,12 +5,12 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-file_path = 'example_files/VWConstel2024_1.asc'
-# file_path = 'example_files/VWConstel2024_2.asc'
+# file_path = 'example_files/VWConstel2024_1.asc'
+file_path = 'example_files/VWConstel2024_2.asc'
 
 # Print control variables
 PRINT_DM1_SINGLE_FRAME = False
-PRINT_TP_CT = False
+PRINT_TP_CM = False
 PRINT_TP_DT = False
 PRINT_J1939TP_FECAp = False
 PRINT_TP_DM1_MULTI_FRAME = False
@@ -404,9 +404,11 @@ def read_log_and_print_dtc(file_path):
                         if pgn != 65226:  # If it is not DM1 (0xFECA), ignore it
                             continue
 
-                        # TP.CT version of the TP.CM message
-                        message_id_tp_ct = message_id.replace('EC', 'EB', 1)
+                        # TP.DT version of the TP.CM message
+                        message_id_tp_dt = message_id.replace('EC', 'EB', 1)
 
+                        # "TP.CM" is the anouncement of a new multiframe BAM message, 
+                        # therefore it should not exist on memory, but if it exists, we remove it
                         for bam in current_bams:
                             if bam['message_id'] == message_id:
                                 current_bams.remove(bam)
@@ -414,14 +416,14 @@ def read_log_and_print_dtc(file_path):
                         current_bams.append({
                             'timestamp': timestamp,
                             'message_id': message_id,
-                            'message_id_tp_ct': message_id_tp_ct,
+                            'message_id_tp_dt': message_id_tp_dt,
                             'total_size': total_size,
                             'num_packets': num_packets,
                             'pgn': pgn,
                             'packets': []
                         })
-                        if PRINT_TP_CT:
-                            print(f"TP.CT -> Time: {timestamp}, ID: {message_id}, Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
+                        if PRINT_TP_CM:
+                            print(f"TP.CM -> Time: {timestamp}, ID: {message_id}, Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
                 elif is_tp_dt_message_id(message_id):  # Identify TP.DT message
                     result = parse_tp_dt_message(line)
                     if result:
@@ -430,7 +432,7 @@ def read_log_and_print_dtc(file_path):
                             print(f"TP.DT ->  Time: {timestamp}, ID: {message_id}, Packet Number: {packet_number}, Data: {' '.join(data)}")
                         
                         for bam in current_bams:
-                            if bam['message_id_tp_ct'] == message_id:
+                            if bam['message_id_tp_dt'] == message_id:
                                 if packet_number != (len(bam['packets']) + 1):
                                     if PRINT_INCORRET_ORDER:
                                         print('Packet Order is Incorrect')

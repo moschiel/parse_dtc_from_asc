@@ -27,7 +27,7 @@ This script processes J1939 Diagnostic Trouble Code (DTC) messages from a CANaly
 1. Set the `file_path` variable to the path of your ASC log file.
 2. Adjust the print control variables as needed to debug in Terminal:
    - `PRINT_DM1_SINGLE_FRAME`: Print on single-frame DM1 messages.
-   - `PRINT_TP_CT`: Print TP.CT messages.
+   - `PRINT_TP_CM`: Print TP.DT messages.
    - `PRINT_TP_DT`: Print TP.DT messages.
    - `PRINT_J1939TP_FECAp`: Print concatenated J1939TP FECA messages.
    - `PRINT_TP_DM1_MULTI_FRAME`: Print multi-frame DM1 messages.
