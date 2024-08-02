@@ -89,8 +89,8 @@ def load_fmi_descriptions(file_path):
                 print(f"load_fmi_descriptions, line: {line}, error: {ex}")
                 sys.exit()
 
-# Function to parse BAM TP:CT message
-def parse_tp_ct_message(line):
+# Function to parse BAM TP:CM message
+def parse_tp_cm_message(line):
     parts = line.split()
     timestamp = parts[0]
     message_id = parts[2]
@@ -397,7 +397,7 @@ def read_log_and_print_dtc(file_path):
                             print(line.strip())
                         parse_dm1_message(timestamp, src, data_bytes)
                 elif is_tp_cm_message_id(message_id):  # Identify BAM message
-                    result = parse_tp_ct_message(line)
+                    result = parse_tp_cm_message(line)
                     if result:
                         timestamp, message_id, total_size, num_packets, pgn = result
 
@@ -585,14 +585,6 @@ def init_app():
     input_frame = tk.Frame(root)
     input_frame.pack(pady=20)
 
-    inactive_frame = tk.Frame(input_frame)
-    inactive_frame.pack(side=tk.LEFT, padx=5)
-    debounce_inactive_label = tk.Label(inactive_frame, text="Debounce Fault Inactive (seconds):")
-    debounce_inactive_label.pack()
-    debounce_inactive_entry = tk.Entry(inactive_frame)
-    debounce_inactive_entry.pack()
-    debounce_inactive_entry.insert(0, str(debounce_fault_inactive))
-
     count_active_frame = tk.Frame(input_frame)
     count_active_frame.pack(side=tk.LEFT, padx=5)
     debounce_active_count_label = tk.Label(count_active_frame, text="Debounce Fault Active Count:")
@@ -608,6 +600,14 @@ def init_app():
     debounce_active_time_entry = tk.Entry(debounce_active_frame)
     debounce_active_time_entry.pack()
     debounce_active_time_entry.insert(0, str(debounce_fault_active_time))
+
+    inactive_frame = tk.Frame(input_frame)
+    inactive_frame.pack(side=tk.LEFT, padx=5)
+    debounce_inactive_label = tk.Label(inactive_frame, text="Debounce Fault Inactive Time (seconds):")
+    debounce_inactive_label.pack()
+    debounce_inactive_entry = tk.Entry(inactive_frame)
+    debounce_inactive_entry.pack()
+    debounce_inactive_entry.insert(0, str(debounce_fault_inactive))
 
     def update_configs():
         global debounce_fault_inactive, debounce_fault_active_count, debounce_fault_active_time
