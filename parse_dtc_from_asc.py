@@ -47,6 +47,7 @@ stop_thread = True
 finished_thread = False
 close_app = False
 app_mode = None
+changedFaultList = False
 
 # Dictionary to store descriptions
 source_descriptions = {}
@@ -218,13 +219,15 @@ def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, timestamp):
                 if(fault['occurrences'] >= debounce_fault_active_count): #if has the minimum amount of occurrences
                     fault['status'] = 'active' # set as active
                     if app_mode == 'SHOW_TIMELINE':
-                        values = fault_to_tupple(fault)
+                        values = (timestamp,) + fault_to_tupple(fault)
                         tag = 'active'
                         tree.insert('', 'end', values=values, tags=(tag,))
                     if PRINT_NEW_ACTIVE_DTCs:
                         print(f'[{timestamp}] new fault SRC: 0x{src} ({int(src, 16)}), SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}')
 
     added_new_faults = not updatedExistingFault
+    global changedFaultList
+    changedFaultList = added_new_faults 
     return added_new_faults
 
 # Remove faults that have not been updated for a certain time
@@ -235,36 +238,29 @@ def remove_inactive_faults(timestamp):
 
     global active_faults
     global debounce_fault_inactive
-    current_time = timestamp
+    global changedFaultList
     new_active_faults = []
-    removed = False
     for fault in active_faults:
         if(fault['status'] == 'candidate'): # candidate fault, do not keep on list if it is not a candidate anymore
-            if((timestamp - fault['first_seen']) <= debounce_fault_active_time):
-                new_active_faults.append(fault)
-            else:
+            if((timestamp - fault['first_seen']) > debounce_fault_active_time):
                 if PRINT_REMOVED_CANDIDATE_DTCs: 
                     print(f"[{timestamp}] removed CANDIDATE fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
-                removed = True
-        else: # active fault, do not keep on list if it is not active anymore
-            if current_time - fault['last_seen'] <= debounce_fault_inactive:
-                new_active_faults.append(fault)
+                changedFaultList = True
             else:
+                new_active_faults.append(fault)
+        else: # active fault, do not keep on list if it is not active anymore
+            if timestamp - fault['last_seen'] > debounce_fault_inactive:
                 if app_mode == 'SHOW_TIMELINE':
-                    aux_fault = fault
-                    aux_fault['last_seen'] = timestamp
-                    aux_fault['status'] = 'inactive'
-                    values = fault_to_tupple(aux_fault)
+                    fault['status'] = 'inactive'
+                    values = (timestamp,) + fault_to_tupple(fault)
                     tag = 'inactive'
                     tree.insert('', 'end', values=values, tags=(tag,))
                 if PRINT_REMOVED_ACTIVE_DTCs: 
-                    print(f"[{timestamp}] removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
-                removed = True
-    
+                    print(f"[{timestamp}] Removed fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}, LastSeen: {fault['last_seen']}")
+                changedFaultList = True
+            else:
+                new_active_faults.append(fault)
     active_faults = new_active_faults
-    if removed:
-        update_active_faults_display()
-        print_active_faults()
 
 # Function to parse DM1 message
 def parse_dm1_message(timestamp, src, data_bytes):
@@ -276,7 +272,6 @@ def parse_dm1_message(timestamp, src, data_bytes):
     if PRINT_DM1_PARSED:
         print(f"[{timestamp}] DM1_PARSED -> SRC: 0x{src} ({int(src, 16)}), MIL: {mil}, RSL: {rsl}, AWL: {awl}, PL: {pl}")
     
-    added_new_faults = False
     # Starting at third byte, iterate 4 bytes each cycle
     j = 1
     for i in range(2, len(data_bytes) - 2, 4):
@@ -285,15 +280,9 @@ def parse_dm1_message(timestamp, src, data_bytes):
         cm = (data_bytes[i + 3] >> 7) & 0x01  # byte6, 1bit, Conversion Method
         oc = data_bytes[i + 3] & 0x7F  # byte6, 7bits, Occurrence Counter 
         if PRINT_DM1_PARSED:
-            print(f"        DTC[{j}] -> SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}, CM: {cm}, OC: {oc}")
-        
-        if update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, int(float(timestamp))):
-            added_new_faults = True
+            print(f"        DTC[{j}] -> SPN: 0x{format(spn, 'X')} ({spn}), FMI: {fmi}, CM: {cm}, OC: {oc}")    
+        update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, int(float(timestamp)))
         j += 1
-
-    update_active_faults_display()
-    if added_new_faults:
-        print_active_faults()
 
 # Sleep to emulate log execution time
 def emulate_waiting_time(timestamp):
@@ -358,6 +347,7 @@ def read_log_and_print_dtc(file_path):
     clear_control_variables()
     current_bams = []  # List to store current BAM messages
     started_measurement = False
+    last_timestamp = 0
 
     with open(file_path, 'r') as file:
         for line in file:
@@ -458,7 +448,20 @@ def read_log_and_print_dtc(file_path):
                                     current_bams.remove(bam)
                                     break
 
-                remove_inactive_faults(int_timestamp)
+                # Run updates if timestamp read from log differs at least 1 second
+                if (int_timestamp - last_timestamp) >= 1:
+                    last_timestamp = int_timestamp
+                    emulate_waiting_time(int_timestamp)
+                    update_screen_time(int_timestamp)
+                    check_faults(int_timestamp)
+
+def check_faults(timestamp):
+    remove_inactive_faults(timestamp)
+    global changedFaultList
+    if changedFaultList:
+        changedFaultList = False
+        update_active_faults_display()
+        print_active_faults()
 
 # Dictionary to store references to treeview items
 treeview_items = {}
@@ -473,7 +476,7 @@ def update_active_faults_display():
 
     for fault in active_faults:
         key = (fault['src'], fault['spn'], fault['fmi'])
-        values = fault_to_tupple(fault)
+        values = (0,) + fault_to_tupple(fault)
         tag = fault['status']
         
         if key in treeview_items:
@@ -503,7 +506,7 @@ def init_app():
     root.title("Active Faults")
     root.geometry("900x500")
 
-    columns = ('Last Seen', 'Status', 'SRC', 'SPN', 'FMI', 'CM', 'OC', 'MIL', 'RSL', 'AWL', 'PL')
+    columns = ('Time', 'Last Seen', 'Status', 'SRC', 'SPN', 'FMI', 'CM', 'OC', 'MIL', 'RSL', 'AWL', 'PL')
     
     global tree
     tree = ttk.Treeview(root, columns=columns, show='headings')
@@ -511,6 +514,7 @@ def init_app():
         tree.heading(col, text=col)
         tree.column(col, width=80)
     tree.pack(fill=tk.BOTH, expand=True)
+    tree.column('Time', width=0, stretch=tk.NO) # First columns start invisible
     
     tree.tag_configure('active', background='lightgreen')
     tree.tag_configure('inactive', background='lightgrey')
@@ -539,6 +543,7 @@ def init_app():
         if app_mode == 'EMULATE_TIME':
             return
         app_mode = 'EMULATE_TIME'
+        tree.column('Time', width=0, stretch=tk.NO)
         stop_thread = False
         finished_thread = False
         try:
@@ -555,6 +560,7 @@ def init_app():
         if app_mode == 'SHOW_TIMELINE':
             return
         app_mode = 'SHOW_TIMELINE'
+        tree.column('Time', width=80, stretch=tk.YES)
         stop_thread = False
         finished_thread = False
         try:
