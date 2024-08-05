@@ -30,6 +30,7 @@ timeline_faults = []
 debounce_fault_inactive = 10 # Remove faults that have not been updated by this amount of time (seconds)
 debounce_fault_active_count = 10  # Number of occurrences to consider fault active
 debounce_fault_active_time = 10  # Time window in seconds to consider fault active
+timeout_multi_frame = 5
 
 # Control variables for emulating time
 last_time = 0.0 
@@ -406,7 +407,8 @@ def read_log_and_print_dtc(file_path):
                                 current_bams.remove(bam)
 
                         current_bams.append({
-                            'timestamp': timestamp,
+                            'first_seen': int_timestamp,
+                            'last_seen': int_timestamp,
                             'message_id': message_id,
                             'message_id_tp_dt': message_id_tp_dt,
                             'total_size': total_size,
@@ -415,7 +417,7 @@ def read_log_and_print_dtc(file_path):
                             'packets': []
                         })
                         if PRINT_TP_CM:
-                            print(f"[{timestamp}] TP.CM -> ID: {message_id}, Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
+                            print(f"[{int_timestamp}] TP.CM -> ID: {message_id}, Size: {total_size} bytes, Number of Packets: {num_packets}, PGN: {pgn:#X}")
                 elif is_tp_dt_message_id(message_id):  # Identify TP.DT message
                     result = parse_tp_dt_message(line)
                     if result:
@@ -424,14 +426,15 @@ def read_log_and_print_dtc(file_path):
                         for bam in current_bams:
                             if bam['message_id_tp_dt'] == message_id:
                                 if PRINT_TP_DT:
-                                    print(f"[{timestamp}] TP.DT -> ID: {message_id}, Packet Number: {packet_number} of {bam['num_packets']}, Data: {' '.join(data)}")
+                                    print(f"[{int_timestamp}] TP.DT -> ID: {message_id}, Packet Number: {packet_number} of {bam['num_packets']}, Data: {' '.join(data)}")
                                 if packet_number != (len(bam['packets']) + 1):
                                     if PRINT_INCORRET_ORDER:
-                                        print(f'[{timestamp}] Packet Order is Incorrect, ID: {(message_id.replace('x','',1))}, Received: {packet_number}, Expected: {(len(bam['packets']) + 1)}')
+                                        print(f'[{int_timestamp}] Packet Order is Incorrect, ID: {(message_id.replace('x','',1))}, Received: {packet_number}, Expected: {(len(bam['packets']) + 1)}')
                                     current_bams.remove(bam)
                                     break
 
                                 bam['packets'].append((packet_number, data))
+                                bam['last_seen'] = int_timestamp
                                 if len(bam['packets']) == bam['num_packets']:
                                     bam['packets'].sort()
                                     combined_data = []
@@ -440,10 +443,10 @@ def read_log_and_print_dtc(file_path):
                                     combined_data = combined_data[:bam['total_size']]
 
                                     if PRINT_TP_DM1_MULTI_FRAME:
-                                        print(f"[{timestamp}] TP CONCAT -> ID: {(bam['message_id'].replace('x','',1))}, Size: {bam['total_size']}, Data: {' '.join(combined_data)}")
+                                        print(f"[{int_timestamp}] TP CONCAT -> ID: {(bam['message_id'].replace('x','',1))}, Size: {bam['total_size']}, Data: {' '.join(combined_data)}")
                                     
                                     data_bytes = [int(b, 16) for b in combined_data]
-                                    parse_dm1_message(timestamp, src, data_bytes)
+                                    parse_dm1_message(int_timestamp, src, data_bytes)
                                     
                                     current_bams.remove(bam)
                                     break
@@ -453,10 +456,18 @@ def read_log_and_print_dtc(file_path):
                     last_timestamp = int_timestamp
                     emulate_waiting_time(int_timestamp)
                     update_screen_time(int_timestamp)
-                    check_faults(int_timestamp)
+                    check_faults(int_timestamp, current_bams)
 
-def check_faults(timestamp):
+def remove_incomplete_multi_frame_message(timestamp, bams):
+    for bam in bams:
+        if (timestamp - bam['last_seen']) > timeout_multi_frame:
+            print(f"[{timestamp}] discard incomplete multiframe, CM: {bam['message_id']}, DT: {bam['message_id_tp_dt']}, FirstSeen: {bam['first_seen']}, LastSeen: {bam['last_seen']}")
+            bams.remove(bam)
+
+
+def check_faults(timestamp, bams):
     remove_inactive_faults(timestamp)
+    remove_incomplete_multi_frame_message(timestamp, bams)
     global changedFaultList
     if changedFaultList:
         changedFaultList = False
