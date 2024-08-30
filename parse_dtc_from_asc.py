@@ -33,10 +33,10 @@ candidate_faults = []
 active_faults = []
 timeline_faults = []
 
+fault_active_count = 10  # Number of occurrences that must occur within a time window for a fault to become active
+fault_active_time_window = 10  # Time window for a fault to become active (in seconds)
 debounce_fault_inactive = 10 # Remove faults that have not been updated by this amount of time (seconds)
-debounce_fault_active_count = 10  # Number of occurrences to consider fault active
-debounce_fault_active_time = 10  # Time window in seconds to consider fault active
-timeout_multi_frame = 5
+timeout_multi_frame = 5 # Maximum time to receive a complete multiframe message, otherwise discards the message
 
 # Control variables for emulating time
 last_time = 0.0 
@@ -223,8 +223,8 @@ def update_active_faults(src, spn, fmi, cm, oc, mil, rsl, awl, pl, timestamp):
     # Promote candidate faults to active if they meet the criteria
     for fault in active_faults:
         if(fault['status'] == 'candidate'): # is candidate
-            if((timestamp - fault['first_seen']) <= debounce_fault_active_time): # if debounce active timeout
-                if(fault['occurrences'] >= debounce_fault_active_count): #if has the minimum amount of occurrences
+            if((timestamp - fault['first_seen']) <= fault_active_time_window): # if debounce active timeout
+                if(fault['occurrences'] >= fault_active_count): #if has the minimum amount of occurrences
                     fault['status'] = 'active' # set as active
                     if app_mode == 'SHOW_TIMELINE':
                         values = (timestamp,) + fault_to_tupple(fault)
@@ -247,7 +247,7 @@ def remove_inactive_faults(timestamp):
     new_active_faults = []
     for fault in active_faults:
         if(fault['status'] == 'candidate'): # candidate fault, do not keep on list if it is not a candidate anymore
-            if((timestamp - fault['first_seen']) > debounce_fault_active_time):
+            if((timestamp - fault['first_seen']) > fault_active_time_window):
                 if PRINT_REMOVED_CANDIDATE_DTCs: 
                     print(f"[{timestamp}] removed CANDIDATE fault SRC: 0x{fault['src']} ({int(fault['src'], 16)}), SPN: 0x{format(fault['spn'], 'X')} ({fault['spn']}), FMI: {fault['fmi']}")
                 changedFaultList = True
@@ -624,7 +624,7 @@ def init_app():
     debounce_active_count_label.pack()
     debounce_active_count_entry = tk.Entry(count_active_frame)
     debounce_active_count_entry.pack()
-    debounce_active_count_entry.insert(0, str(debounce_fault_active_count))
+    debounce_active_count_entry.insert(0, str(fault_active_count))
 
     debounce_active_frame = tk.Frame(input_frame)
     debounce_active_frame.pack(side=tk.LEFT, padx=5)
@@ -632,7 +632,7 @@ def init_app():
     debounce_active_time_label.pack()
     debounce_active_time_entry = tk.Entry(debounce_active_frame)
     debounce_active_time_entry.pack()
-    debounce_active_time_entry.insert(0, str(debounce_fault_active_time))
+    debounce_active_time_entry.insert(0, str(fault_active_time_window))
 
     inactive_frame = tk.Frame(input_frame)
     inactive_frame.pack(side=tk.LEFT, padx=5)
@@ -643,11 +643,11 @@ def init_app():
     debounce_inactive_entry.insert(0, str(debounce_fault_inactive))
 
     def update_configs():
-        global debounce_fault_inactive, debounce_fault_active_count, debounce_fault_active_time
+        global debounce_fault_inactive, fault_active_count, fault_active_time_window
         try:
             debounce_fault_inactive = int(debounce_inactive_entry.get())
-            debounce_fault_active_count = int(debounce_active_count_entry.get())
-            debounce_fault_active_time = int(debounce_active_time_entry.get())
+            fault_active_count = int(debounce_active_count_entry.get())
+            fault_active_time_window = int(debounce_active_time_entry.get())
         except ValueError:
             pass
 
